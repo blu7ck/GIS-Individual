@@ -1,0 +1,214 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+  background-color: #111315;
+  color: #FFFFFF;
+  overflow: hidden;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* iOS Safari Safe Area Support */
+:root {
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-right: env(safe-area-inset-right, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-left: env(safe-area-inset-left, 0px);
+}
+
+/* Safe area utility classes */
+.safe-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.safe-right {
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.safe-left {
+  padding-left: env(safe-area-inset-left, 0px);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1e293b;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #10b981;
+  border-radius: 3px;
+}
+
+.cesium-widget-credits {
+  display: none !important;
+}
+
+/* Move Cesium Navigation Widget (Compass) to Top Left */
+.cesium-viewer-toolbar {
+  position: absolute !important;
+  top: 80px !important;
+  left: 16px !important;
+  right: auto !important;
+  bottom: auto !important;
+  flex-direction: column !important;
+}
+
+/* Hide default navigation help button */
+.cesium-navigationHelpButton-wrapper,
+.cesium-viewer-vrButtonContainer,
+.cesium-viewer-geocoderContainer,
+.cesium-viewer-homeButtonContainer,
+.cesium-viewer-sceneModePicker {
+  display: none !important;
+}
+
+/* Login Glass Effect */
+.glass-panel {
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Height Slider Styles */
+.height-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  outline: none;
+}
+
+.height-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #d4af37;
+  cursor: pointer;
+  border: 2px solid #1a1a1a;
+  box-shadow: 0 0 4px rgba(212, 175, 55, 0.5);
+  transition: all 0.2s ease;
+}
+
+.height-slider::-webkit-slider-thumb:hover {
+  background: #f4d03f;
+  box-shadow: 0 0 6px rgba(212, 175, 55, 0.8);
+  transform: scale(1.1);
+}
+
+.height-slider::-webkit-slider-thumb:active {
+  transform: scale(1.2);
+  box-shadow: 0 0 8px rgba(212, 175, 55, 1);
+}
+
+.height-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #d4af37;
+  cursor: pointer;
+  border: 2px solid #1a1a1a;
+  box-shadow: 0 0 4px rgba(212, 175, 55, 0.5);
+  transition: all 0.2s ease;
+}
+
+.height-slider::-moz-range-thumb:hover {
+  background: #f4d03f;
+  box-shadow: 0 0 6px rgba(212, 175, 55, 0.8);
+  transform: scale(1.1);
+}
+
+.height-slider::-moz-range-thumb:active {
+  transform: scale(1.2);
+  box-shadow: 0 0 8px rgba(212, 175, 55, 1);
+}
+
+.height-slider::-webkit-slider-runnable-track {
+  width: 100%;
+  height: 2px;
+  background: transparent;
+}
+
+.height-slider::-moz-range-track {
+  width: 100%;
+  height: 2px;
+  background: transparent;
+}
+
+/* Vertical Height Slider for SecureViewer */
+.height-slider-vertical {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 300px;
+  height: 8px;
+  background: transparent;
+  outline: none;
+  cursor: pointer;
+  transform: rotate(-90deg);
+  transform-origin: center;
+  position: absolute;
+}
+
+.height-slider-vertical::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  background: #d4af37;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid #1a1a1a;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  transition: all 0.2s ease;
+  margin-top: -4px;
+}
+
+.height-slider-vertical::-webkit-slider-thumb:hover {
+  background: #f5d876;
+  transform: scale(1.1);
+}
+
+.height-slider-vertical::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  background: #d4af37;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid #1a1a1a;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  transition: all 0.2s ease;
+}
+
+.height-slider-vertical::-moz-range-thumb:hover {
+  background: #f5d876;
+  transform: scale(1.1);
+}
+
+.height-slider-vertical::-webkit-slider-runnable-track {
+  width: 100%;
+  height: 8px;
+  background: transparent;
+  border-radius: 4px;
+}
+
+.height-slider-vertical::-moz-range-track {
+  width: 100%;
+  height: 8px;
+  background: transparent;
+  border-radius: 4px;
+}

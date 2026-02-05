@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "gis-fixurelabs-mcp",
+  "private_key_id": "fdf3f4046f94152d49faeb60fc8437d0797997f0",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDA4iZ/26EWgbhX\nDX8Y+6wJPWxycj4VTtfWIMjdr1k2Cl2f0FZ4ARWuWPJgboVBkBOEEtctJraHzMbI\nXJC0DYwFVNwGaV3LR17Xm7g7EBRA4z0IRFyFlWTviyhGELpUz8ldDtCA4WI19pDp\n4LhvzcYB/j28lnVIknLn3komROK3WaadmyDGwNSLffzkAHTk9A5slZURB1YqekB9\naDez8TpDg3No8uhT4OU2Fh3/lUCvZaY/UMexNLIfEtwehb6nOpo082LjM8GZedNH\nidtbQMhtZcNBkvlT++HMA3dFMf9C6JMXhc+uaNXAqSlfd5ldPXu0YTxeSgYSsLpp\nwpIpAplLAgMBAAECggEAGiWN+n8XUym6h3J47DYRmB8PeGQsLk9Fyu0ezY5blYvK\nLUPctN/QxJWiJZhV0BFr09eJ+8DntXj46WhC5WWAuahLO0NFR60hGjEtxDPlyvYC\n6//4WtNpn19J0lWqLJ0OOuMrOI1U9uO5uTqRRfarBNImJE5xD6lqkiv7+TwVT61H\nH4AUWCmQn+xtGM+eC+f4LUklKT71VH6OV7zJQzQfzuwD9kTpHqhgxua3vRS/OnhX\nL1cgNWDQSnMj7T6mEYlxZe0I+BOf1+WFbM5GH9EV32k4GkpKLPXs/xvaBUZYN8E6\n7jnfYMFjXXcqcg7kB4XRWNTA8VGxnCMnly8Ju3CxAQKBgQDsnFJF7vbdBmsRk352\nr8fNGdo2C7TqBeo3gt8iUR5UH3c+nDC7pdMjuRbGQb+20G7vIk0AZp+nUYf0wfBp\nqdFcKAoby3W0HkUcwKp3r5PIbP2s5Hq7ApZGeuVp0i2g0qOEeJnchF8q67X/ZLHX\nZz2uyfZsCjXiKRJVrcM9YCjkIQKBgQDQsIIHrGUWtptclS8my02QW5GwyfU3Iy7J\nSYQZMKTv9zcdy+0vdWqPI5FOLjOzKGYglqqT3o0KenQ+X9oMe95+9j/fUtr8b6Pn\ncl1JrRTrPWg3dVipiNXun1tXEfRrZx9J4cBVhf7xwHmtzj4IUTwO4qJR0yNiyyrK\nylRegrNP6wKBgQC5/Xc+ucUboLvxKPuz2CE6vCOncDRZ8SRXVmyH0TQB9GoLsUMt\nfgAmiIu6dFx7HATXvSLCOekt4Qz5/Kk6pd6IjoDDsH9pgpHZNCnLwxxr5CDUExXW\ngwYViO1k7W4oiOs4aoSnrvYQCxEZHNIe/GykROWLr8sDaD2dU+WxDTGXgQKBgGi9\nvnWVfCM7QZzlL4Y8EdD7dJMTuiSTXv8eC9QMyyu5m4sz9/aS6wmuo1Zm8AHiq+d9\nV13iHE3/Cerodus/HHwCoio3TrvWWKBokRPScCZlarIzDm4AxMcAanq4A0IIvvZ4\n/Oyv1TaHEUs/sXjBNPCPpUKGQ0Npjy+6/z90QAVDAoGAM9QSMWyQNrGp5t62nlAU\naAMmLXDbwlJ7mwV+Lcu2RNvCs+whukangbjIip/H+rmhQRFvCJMwFU7F+GJiTCpR\njjmCcjeiotaABcKEb9epbsp0N88U8ZYDaWI0yl0SkZFNpzcG60arSgxNV3B5watK\nGM2ep9m0qfI5u8RJbDD32oY=\n-----END PRIVATE KEY-----\n",
+  "client_email": "pointcloud-runner@gis-fixurelabs-mcp.iam.gserviceaccount.com",
+  "client_id": "106425586803234344783",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/pointcloud-runner%40gis-fixurelabs-mcp.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}

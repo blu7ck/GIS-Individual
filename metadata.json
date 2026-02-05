@@ -1,0 +1,7 @@
+{
+  "name": "HEKAMAP WORKSPACE",
+  "description": "HEKAMAP WORKSPACE - Professional 3D Geospatial Asset Management Platform. Visualize KML/KMZ, GLB/GLTF, and 3D Tiles using CesiumJS. Powered by FIXURELABS.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}

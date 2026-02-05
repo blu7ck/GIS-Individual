@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>FIXURELABS GEOSPATIAL</title>
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="/assets/favicon.png" />
+    <link rel="icon" type="image/x-icon" href="/assets/favicon.png" />
+    <link rel="apple-touch-icon" href="/assets/favicon.png" />
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.136/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+    <script type="importmap">
+{
+  "imports": {
+    "uuid": "https://esm.sh/uuid@^13.0.0",
+    "react": "https://esm.sh/react@^19.2.3",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "cesium": "https://esm.sh/cesium@^1.136.0",
+    "resium": "https://esm.sh/resium@^1.19.2",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.39.3",
+    "aws4fetch": "https://esm.sh/aws4fetch@^1.0.20"
+  }
+}
+</script>
+    <script>
+      // Must be defined before Cesium imports
+      window.CESIUM_BASE_URL = 'https://cesium.com/downloads/cesiumjs/releases/1.136/Build/Cesium/';
+    </script>
+    <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js"></script>
+</head>
+  <body>
+    <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>
