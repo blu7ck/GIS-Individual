@@ -1,7 +1,7 @@
 
 import { useEffect, useMemo, useCallback } from 'react';
 import { Viewer, Matrix4, Cartesian3, Ellipsoid, defined } from 'cesium';
-import { AssetLayer, LayerType } from '../../../../types';
+import { AssetLayer, LayerType } from '../../../types';
 
 interface UseTilesetTransformProps {
     viewer: Viewer | null;

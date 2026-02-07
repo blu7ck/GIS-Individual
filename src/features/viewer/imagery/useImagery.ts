@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Viewer, UrlTemplateImageryProvider } from 'cesium';
-import { MapType } from '../../../../types';
+import { MapType } from '../../../types';
 import { createImageryProvider } from './createImageryProvider';
 import { logger } from '../../../../utils/logger';
 

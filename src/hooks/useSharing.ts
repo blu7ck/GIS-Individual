@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { Project, AssetLayer, StorageConfig } from '../../types';
-import { createSupabaseClient } from '../../lib/supabase';
-import { NotificationType } from '../../components/Notification';
+import { Project, AssetLayer, StorageConfig } from '../types';
+import { createSupabaseClient } from '../lib/supabase';
+import { NotificationType } from '../components/common/Notification';
 
 export function useSharing(
     storageConfig: StorageConfig | null,

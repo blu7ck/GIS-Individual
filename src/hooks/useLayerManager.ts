@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { AssetLayer, LayerType, StorageConfig, Project } from '../../types';
-import { deleteAsset } from '../../services/assetService';
-import { NotificationType } from '../../components/Notification';
+import { AssetLayer, LayerType, StorageConfig, Project } from '../types';
+import { deleteAsset } from '../services/assetService';
+import { NotificationType } from '../components/common/Notification';
 
 export function useLayerManager(
     assets: AssetLayer[],

@@ -1,6 +1,6 @@
 import React from 'react';
 import { ChevronLeft, ChevronRight, LayoutTemplate, Box, Globe, Eye, EyeOff, MousePointer2, ChevronDown, ChevronUp } from 'lucide-react';
-import { AssetLayer, LayerType } from '../../../../types';
+import { AssetLayer, LayerType } from '../../../types';
 
 interface Props {
     layers: AssetLayer[];

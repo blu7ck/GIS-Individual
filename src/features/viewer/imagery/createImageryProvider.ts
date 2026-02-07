@@ -2,7 +2,7 @@ import {
     ArcGisMapServerImageryProvider,
     UrlTemplateImageryProvider
 } from 'cesium';
-import { MapType } from '../../../../types';
+import { MapType } from '../../../types';
 import { ImageryProviderType } from './imageryTypes';
 import { logger } from '../../../../utils/logger';
 

@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { AssetLayer } from '../../../../types';
+import { AssetLayer } from '../../../types';
 
 interface UseSecureAuthResult {
     isAuthenticated: boolean;

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useCallback } from 'react';
 import * as Cesium from 'cesium';
-import { AssetLayer, LayerType, QualitySettings } from '../../../../types';
+import { AssetLayer, LayerType, QualitySettings } from '../../../types';
 import { isMobileDevice } from '../utils/performance';
 import { adjustKmlHeights } from './kml';
 import { clampTilesetToGround } from './tileset';

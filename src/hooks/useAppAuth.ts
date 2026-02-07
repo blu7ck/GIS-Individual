@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 
-import { NotificationType } from '../../components/Notification';
+import { NotificationType } from '../components/common/Notification';
 
 export interface User {
     email: string;

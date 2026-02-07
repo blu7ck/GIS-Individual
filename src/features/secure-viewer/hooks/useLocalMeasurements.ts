@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AssetLayer, MeasurementMode, LayerType } from '../../../../types';
+import { AssetLayer, MeasurementMode, LayerType } from '../../../types';
 
 export function useLocalMeasurements() {
     const [localMeasurements, setLocalMeasurements] = useState<AssetLayer[]>([]);

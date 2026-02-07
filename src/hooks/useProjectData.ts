@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Project, AssetLayer, StorageConfig } from '../../types';
-import { createProject, deleteProject, fetchProjects } from '../../services/projectService';
-import { fetchAssets } from '../../services/assetService';
+import { Project, AssetLayer, StorageConfig } from '../types';
+import { createProject, deleteProject, fetchProjects } from '../services/projectService';
+import { fetchAssets } from '../services/assetService';
 
 
 interface User {

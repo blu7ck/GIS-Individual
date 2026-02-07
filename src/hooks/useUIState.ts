@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { NotificationItem, NotificationType } from '../../components/Notification';
-import { AssetLayer } from '../../types';
+import { NotificationItem, NotificationType } from '../components/common/Notification';
+import { AssetLayer } from '../types';
 
-export type PopupType = 'none' | 'map-settings' | 'upload' | 'layers' | 'measurements';
+export type PopupType = 'none' | 'layers' | 'measurements' | 'upload' | 'settings';
 
 export function useUIState() {
     // Routing / View Mode

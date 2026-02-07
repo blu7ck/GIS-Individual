@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AssetLayer, MapType, SceneViewMode, QualitySettings, getDefaultQualitySettings, QualityLevel } from '../../../../types';
+import { AssetLayer, MapType, SceneViewMode, QualitySettings, getDefaultQualitySettings, QualityLevel } from '../../../types';
 
 export function useSecureViewerState() {
     // Layer State

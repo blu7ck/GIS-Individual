@@ -1,6 +1,6 @@
 import React from 'react';
 import { Ruler, Trash2 } from 'lucide-react';
-import { AssetLayer, MeasurementMode } from '../../../../types';
+import { AssetLayer, MeasurementMode } from '../../../types';
 
 interface Props {
     measurementMode: MeasurementMode;

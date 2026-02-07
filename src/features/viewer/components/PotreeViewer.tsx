@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { X, Settings, Layers, Box, Maximize2, Move, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
-import { AssetLayer, AssetStatus } from '../../../../types';
+import { AssetLayer, AssetStatus } from '../../../types';
 
 interface PotreeViewerProps {
     layer: AssetLayer;

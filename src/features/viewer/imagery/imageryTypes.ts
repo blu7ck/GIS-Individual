@@ -4,7 +4,7 @@ import {
     IonImageryProvider,
     ImageryProvider
 } from 'cesium';
-import { MapType } from '../../../../types';
+import { MapType } from '../../../types';
 
 export type ImageryProviderType =
     | ArcGisMapServerImageryProvider

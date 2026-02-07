@@ -1,131 +1,188 @@
-
-import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { Viewer } from 'cesium';
+import React, { useRef, useEffect } from 'react';
 import * as Cesium from 'cesium';
 
 interface CompassProps {
-    viewer: Viewer | null;
+    viewer: Cesium.Viewer | null;
+    className?: string;
+    style?: React.CSSProperties;
 }
 
-export const Compass: React.FC<CompassProps> = ({ viewer }) => {
-    const [compassHeading, setCompassHeading] = useState<number>(0);
-    const compassSvgRef = useRef<SVGSVGElement | null>(null);
+export const Compass: React.FC<CompassProps> = ({ viewer, className, style }) => {
+    const compassRef = useRef<HTMLButtonElement>(null);
+    const needleRef = useRef<SVGGElement>(null);
 
-    // Update compass heading based on camera orientation
+    // Optimized Rotation Logic (Direct DOM manipulation via postRender for 60fps)
     useEffect(() => {
-        if (!viewer) return;
+        if (!viewer || viewer.isDestroyed()) {
+            return;
+        }
 
-        let timeoutId: number | null = null;
-        let isMounted = true;
-        let lastHeading = -999;
-        let updateCompass: (() => void) | null = null;
+        const scene = viewer.scene;
 
-        const setupCompass = () => {
-            if (!isMounted) return;
+        const updateCompass = () => {
+            if (viewer.isDestroyed() || !needleRef.current) return;
 
-            if (viewer.isDestroyed()) return;
-
-            const scene = viewer.scene;
-            const camera = viewer.camera;
-            if (!scene || !camera) {
-                timeoutId = window.setTimeout(setupCompass, 100);
-                return;
+            try {
+                const heading = Cesium.Math.toDegrees(viewer.camera.heading);
+                // Rotate the NEEDLE opposite to heading to point North
+                // If heading is 90 (East), Needle should point Left (-90).
+                needleRef.current.style.transform = `rotate(${-heading}deg)`;
+            } catch (e) {
+                // Ignore context lost errors
             }
-
-            updateCompass = () => {
-                try {
-                    if (!isMounted || viewer.isDestroyed() || scene.isDestroyed()) return;
-
-                    const heading = Cesium.Math.toDegrees(camera.heading);
-
-                    if (Math.abs(heading - lastHeading) > 0.01) {
-                        lastHeading = heading;
-                        if (compassSvgRef.current) {
-                            compassSvgRef.current.style.transform = `rotate(${-heading}deg)`;
-                        }
-                        // Sync state for accessibility/other uses if needed
-                        setCompassHeading(heading);
-                    }
-                } catch (e) { }
-            };
-
-            if (updateCompass) updateCompass();
-            scene.postRender.addEventListener(updateCompass);
         };
 
-        setupCompass();
+        scene.postRender.addEventListener(updateCompass);
+
+        // Initial update
+        updateCompass();
 
         return () => {
-            isMounted = false;
-            if (timeoutId !== null) clearTimeout(timeoutId);
-            try {
-                if (viewer && !viewer.isDestroyed()) {
-                    const scene = viewer.scene;
-                    if (!scene.isDestroyed() && updateCompass) {
-                        scene.postRender.removeEventListener(updateCompass);
-                    }
-                }
-            } catch (e) { }
+            if (!viewer.isDestroyed()) {
+                scene.postRender.removeEventListener(updateCompass);
+            }
         };
     }, [viewer]);
 
-    const resetToNorth = useCallback(() => {
+    const handleResetNorth = () => {
         if (!viewer || viewer.isDestroyed()) return;
-        const camera = viewer.camera;
-        const currentPosition = camera.positionCartographic;
 
-        camera.flyTo({
+        const currentPos = viewer.camera.positionCartographic;
+
+        viewer.camera.flyTo({
             destination: Cesium.Cartesian3.fromRadians(
-                currentPosition.longitude,
-                currentPosition.latitude,
-                currentPosition.height
+                currentPos.longitude,
+                currentPos.latitude,
+                currentPos.height
             ),
             orientation: {
-                heading: 0,
-                pitch: camera.pitch,
+                heading: 0, // North
+                pitch: viewer.camera.pitch,
                 roll: 0
             },
-            duration: 0.5
+            duration: 0.8,
+            easingFunction: Cesium.EasingFunction.QUADRATIC_IN_OUT
         });
-    }, [viewer]);
+    };
 
     return (
         <button
-            onClick={resetToNorth}
-            className="absolute top-4 left-4 z-10 w-14 h-14 bg-gray-900/90 backdrop-blur-md border border-gray-600 rounded-full flex items-center justify-center hover:bg-gray-800 hover:border-gray-500 transition-all shadow-xl cursor-pointer group"
-            title="Click to reset to North"
+            ref={compassRef}
+            onClick={handleResetNorth}
+            className={`
+                group relative flex items-center justify-center
+                w-20 h-20 rounded-full
+                shadow-2xl
+                transition-all duration-200
+                hover:scale-105 active:scale-95
+                ${className || ''}
+            `}
             style={{
-                boxShadow: '0 4px 20px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1)'
+                zIndex: 100,
+                background: 'linear-gradient(to bottom, #F7F7F7, #ECECEC)',
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06), 0 0 0 1px rgba(0,0,0,0.05)',
+                ...style
             }}
+            title="Kuzeye Dön (Sıfırla)"
+            aria-label="Kuzeye Dön"
         >
+            {/* 
+               SVG Reconstruction of compass-ref.txt 
+               Original Size: 400px x 400px
+               ViewBox: 0 0 400 400
+            */}
             <svg
-                ref={compassSvgRef}
-                width="44"
-                height="44"
-                viewBox="0 0 44 44"
-                className="transition-transform duration-150 ease-out"
-                style={{ transform: `rotate(${-compassHeading}deg)` }}
+                viewBox="0 0 400 400"
+                className="w-full h-full"
+                style={{ filter: 'drop-shadow(0px 2px 2px rgba(0,0,0,0.1))' }}
             >
-                <circle cx="22" cy="22" r="20" fill="none" stroke="#4B5563" strokeWidth="1" />
-                <defs>
-                    <radialGradient id="compassBg" cx="50%" cy="50%" r="50%">
-                        <stop offset="0%" stopColor="#374151" />
-                        <stop offset="100%" stopColor="#1F2937" />
-                    </radialGradient>
-                </defs>
-                <circle cx="22" cy="22" r="18" fill="url(#compassBg)" />
-                <text x="22" y="9" textAnchor="middle" fontSize="8" fontWeight="bold" fill="#EF4444" className="select-none">N</text>
-                <text x="22" y="39" textAnchor="middle" fontSize="6" fill="#9CA3AF" className="select-none">S</text>
-                <text x="6" y="24" textAnchor="middle" fontSize="6" fill="#9CA3AF" className="select-none">W</text>
-                <text x="38" y="24" textAnchor="middle" fontSize="6" fill="#9CA3AF" className="select-none">E</text>
-                <polygon points="22,6 19,22 22,20 25,22" fill="#EF4444" stroke="#DC2626" strokeWidth="0.5" />
-                <polygon points="22,38 19,22 22,24 25,22" fill="#E5E7EB" stroke="#9CA3AF" strokeWidth="0.5" />
-                <circle cx="22" cy="22" r="3" fill="#374151" stroke="#6B7280" strokeWidth="1" />
-                <circle cx="22" cy="22" r="1.5" fill="#9CA3AF" />
+                {/* Outer Body Gradient is handled by button background. 
+                    Border Radius 100% handled by button.
+                    We just need the Inner Body and Content.
+                */}
+
+                {/* Inner Body 
+                    CSS: width 340px, height 340px, top 27.5, left 27.5. border 3px solid #C5C5C5. bg #3D3D3D.
+                    Center: 200, 200. Radius: 170.
+                */}
+                <circle
+                    cx="200" cy="200" r="170"
+                    fill="#3D3D3D"
+                    stroke="#C5C5C5" strokeWidth="6"
+                />
+
+                {/* Letters 
+                    CSS: Font Lobster Two. Color #FFF.
+                    Positions relative to 340x340 inner div (left 27.5, top 27.5)
+                    North: left 155, top 10. (Center X of Inner = 170. 155 is -15px. width approx 30?).
+                    Let's align them by center in SVG.
+                    Center X = 200, Center Y = 200.
+                    Radius of text placement approx 140?
+                */}
+                <style>
+                    {`
+                        .compass-text {
+                            font-family: 'Lobster Two', serif; /* Fallback if not loaded */
+                            font-size: 56px; /* Scaled from 36px relative to 340px container? 36px/340 ~ 0.1. 0.1*400 = 40. Lets try bigger. */
+                            fill: #FFF;
+                            font-weight: bold;
+                            pointer-events: none;
+                            user-select: none;
+                        }
+                    `}
+                </style>
+
+                {/* N - Top */}
+                <text x="200" y="85" textAnchor="middle" className="compass-text">N</text>
+
+                {/* E - Right */}
+                <text x="325" y="220" textAnchor="middle" className="compass-text">E</text>
+
+                {/* S - Bottom */}
+                <text x="200" y="355" textAnchor="middle" className="compass-text">S</text>
+
+                {/* W - Left */}
+                <text x="75" y="220" textAnchor="middle" className="compass-text">W</text>
+
+                {/* Rotating Needle Group 
+                    CSS: main-arrow height 100% (of inner? 340px). width 30px.
+                    Top part (Red): border-bottom 165px.
+                    Bottom part (White): border-bottom 165px.
+                    Center at 170,170 of inner -> 200,200 of outer.
+                */}
+                <g
+                    ref={needleRef}
+                    style={{
+                        transformOrigin: '200px 200px',
+                        transition: 'transform 0.1s linear'
+                    }}
+                >
+                    {/* Shadow for depth */}
+                    <path d="M200 60 L220 200 L200 340 L180 200 Z" fill="black" fillOpacity="0.3" transform="translate(4, 4)" />
+
+                    {/* Arrow Up (Red) 
+                        Tip at Top. Base at Center.
+                        CSS arrow-up: border-bottom 165px #EF5052. width 0. borders 15px.
+                        So Triangle: Bottom Width 30. Height 165.
+                        Tip: (200, 200 - 165 - gap?).
+                        Let's center it.
+                        Total height 330.
+                        Top Y: 200 - 165 = 35.
+                        Bottom Y: 200 + 165 = 365.
+                        Width 30. X from 185 to 215.
+                    */}
+                    <path d="M200 35 L215 200 L185 200 Z" fill="#EF5052" />
+
+                    {/* Arrow Down (White) 
+                        Tip at Bottom. Base at Center.
+                    */}
+                    <path d="M200 365 L215 200 L185 200 Z" fill="#F3F3F3" />
+
+                    {/* Center Pin (Optional aesthetic addition) */}
+                    <circle cx="200" cy="200" r="8" fill="#C5C5C5" />
+                    <circle cx="200" cy="200" r="4" fill="#3D3D3D" />
+                </g>
             </svg>
-            <div className="absolute inset-0 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
-                style={{ boxShadow: '0 0 15px rgba(239, 68, 68, 0.3)' }}
-            />
         </button>
     );
 };

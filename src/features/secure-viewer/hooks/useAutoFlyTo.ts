@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { AssetLayer, LayerType } from '../../../../types';
+import { AssetLayer, LayerType } from '../../../types';
 
 export function useAutoFlyTo(
     isAuthenticated: boolean,

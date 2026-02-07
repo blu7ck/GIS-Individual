@@ -1,0 +1,70 @@
+/* Global CSS Variables & Reset */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+    /* Hekamap Design System v2.0 */
+
+    /* Primary Colors */
+    --primary: #3A82F7;
+    --primary-hover: #2563EB;
+    --primary-foreground: #FFFFFF;
+
+    /* Backgrounds */
+    --bg-app: #111315;
+    --bg-panel: #1A1D21;
+    --bg-surface: #22262B;
+
+    /* Borders */
+    --border-light: #2A2E33;
+    --border-active: #3A82F7;
+
+    /* Text */
+    --text-primary: #FFFFFF;
+    --text-secondary: #9CA3AF;
+    --text-muted: #6B7280;
+
+    /* Status */
+    --success: #10B981;
+    --warning: #F59E0B;
+    --error: #EF4444;
+
+    /* Spacing */
+    --header-height: 3.5rem;
+    /* 56px */
+    --sidebar-width: 18rem;
+    /* 288px */
+}
+
+@layer base {
+
+    html,
+    body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+    }
+
+    body {
+        @apply bg-[var(--bg-app)] text-[var(--text-primary)] antialiased overflow-hidden;
+    }
+}
+
+/* Scrollbar Customization */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    @apply bg-gray-700/50 rounded;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-600;
+}

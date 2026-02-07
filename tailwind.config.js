@@ -2,9 +2,7 @@
 export default {
   content: [
     "./index.html",
-    "./*.{js,ts,jsx,tsx}",
-    "./components/**/*.{js,ts,jsx,tsx}",
-    "./lib/**/*.{js,ts,jsx,tsx}",
+    "./src/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
     extend: {
@@ -22,6 +20,35 @@ export default {
             muted: '#6B7280',
           }
         },
+        carta: {
+          mist: {
+            300: '#CBD5E1',
+            400: '#94A3B8',
+            500: '#64748B',
+            600: '#475569',
+          },
+          forest: {
+            300: '#6EE7B7',
+            400: '#34D399',
+            500: '#10B981',
+          },
+          gold: {
+            300: '#FCD34D',
+            400: '#FBBF24',
+            500: '#F59E0B',
+            600: '#D97706',
+          },
+          deep: {
+            700: '#334155',
+            800: '#1E293B',
+          },
+          accent: {
+            red: '#EF4444',
+            azure: '#3A82F7', // Azure
+            orange: '#F97316', // Orange
+            cyan: '#06B6D4',  // Cam Böceği (Cyan)
+          }
+        },
       },
       fontFamily: {
         sans: ['Inter', 'Roboto', 'sans-serif'],
@@ -33,6 +60,16 @@ export default {
       boxShadow: {
         'engineering': '0 1px 3px 0 rgba(0, 0, 0, 0.3)',
         'engineering-lg': '0 4px 6px -1px rgba(0, 0, 0, 0.4)',
+        'glass': '0 8px 32px 0 rgba(31, 38, 135, 0.37)',
+      },
+      animation: {
+        'float': 'float 6s ease-in-out infinite',
+      },
+      keyframes: {
+        float: {
+          '0%, 100%': { transform: 'translateY(0)' },
+          '50%': { transform: 'translateY(-20px)' },
+        }
       },
     },
   },

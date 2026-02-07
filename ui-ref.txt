@@ -1,0 +1,627 @@
+import React, { useState, useEffect } from 'react';
+import { Folder, FileBox, Plus, ChevronRight, ChevronDown, Eye, EyeOff, Share2, Map, Trash2, Box, Edit2, Check, X as XIcon } from 'lucide-react';
+import { Project, AssetLayer, LayerType, StorageConfig } from '../types';
+import { Button } from './Button';
+import { StorageBar } from './StorageBar';
+
+interface Props {
+  projects: Project[];
+  assets: AssetLayer[];
+  selectedProjectId: string | null;
+  onSelectProject: (id: string | null) => void;
+  onCreateProject: (name: string) => void;
+  onDeleteProject: (id: string) => void;
+  onToggleLayer: (id: string) => void;
+  onToggleAllLayers?: (projectId: string, visible: boolean) => void;
+  onDeleteLayer: (id: string) => void;
+  onShareLayer: (asset: AssetLayer) => void;
+  onShareProject?: (project: Project) => void;
+  onLayerClick?: (layerId: string) => void;
+  onOpenModelViewer?: (layer: AssetLayer) => void;
+  onUpdateMeasurement?: (id: string, newName: string) => void;
+  onUpdateAsset?: (id: string, newName: string, updates?: { heightOffset?: number; scale?: number }) => void;
+  externalCreateTrigger?: number; // Increment to trigger create mode
+  storageConfig?: StorageConfig | null; // For storage bar
+}
+
+export const ProjectPanel: React.FC<Props> = ({
+  projects,
+  assets,
+  selectedProjectId,
+  onSelectProject,
+  onCreateProject,
+  onDeleteProject,
+  onToggleLayer,
+  onToggleAllLayers,
+  onDeleteLayer,
+  onShareLayer,
+  onShareProject,
+  onLayerClick,
+  onOpenModelViewer,
+  onUpdateMeasurement,
+  onUpdateAsset,
+  externalCreateTrigger,
+  storageConfig
+}) => {
+  const [newProjectName, setNewProjectName] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
+  const [editingMeasurementId, setEditingMeasurementId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState('');
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+
+  // Handle external create trigger
+  useEffect(() => {
+    if (externalCreateTrigger && externalCreateTrigger > 0) {
+      setIsCreating(true);
+    }
+  }, [externalCreateTrigger]);
+
+  const toggleCategory = (projectId: string, category: string) => {
+    const key = `${projectId}-${category}`;
+    setExpandedCategories(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(key)) {
+        newSet.delete(key);
+      } else {
+        newSet.add(key);
+      }
+      return newSet;
+    });
+  };
+
+  const isCategoryExpanded = (projectId: string, category: string): boolean => {
+    const key = `${projectId}-${category}`;
+    return expandedCategories.has(key); // Default to collapsed (empty set means collapsed)
+  };
+
+  // Initialize categories as expanded by default on first render
+  useEffect(() => {
+    projects
+      .filter(project => !project.parent_project_id)
+      .forEach(project => {
+        const dataKey = `${project.id}-data`;
+        const measurementsKey = `${project.id}-measurements`;
+        setExpandedCategories(prev => {
+          const newSet = new Set(prev);
+          newSet.add(dataKey);
+          newSet.add(measurementsKey);
+          return newSet;
+        });
+      });
+  }, [projects.length]); // Only run once when projects are first loaded
+
+  const handleEditStart = (layer: AssetLayer) => {
+    setEditingMeasurementId(layer.id);
+    setEditingName(layer.name);
+  };
+
+  const handleEditSave = () => {
+    if (!editingMeasurementId || !editingName.trim()) return;
+
+    // Check if it's a measurement (ANNOTATION type) or regular asset
+    const targetLayer = assets.find(a => a.id === editingMeasurementId);
+    if (!targetLayer) return;
+
+    if (targetLayer.type === LayerType.ANNOTATION && onUpdateMeasurement) {
+      // It's a measurement
+      onUpdateMeasurement(editingMeasurementId, editingName.trim());
+    } else if (onUpdateAsset) {
+      // It's a regular asset (3D Tiles, KML, GLB, etc.)
+      onUpdateAsset(editingMeasurementId, editingName.trim());
+    }
+
+    setEditingMeasurementId(null);
+    setEditingName('');
+  };
+
+  const handleEditCancel = () => {
+    setEditingMeasurementId(null);
+    setEditingName('');
+  };
+
+  const handleCreate = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newProjectName) {
+      onCreateProject(newProjectName);
+      setNewProjectName('');
+      setIsCreating(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col h-full bg-transparent text-white">
+      {/* Header removed - Logo and title are in App.tsx panel header */}
+
+      {/* New Project Form */}
+      {isCreating && (
+        <form onSubmit={handleCreate} className="p-3 border-b border-[#57544F] bg-[#1C1B19]/50 animate-in slide-in-from-top-2">
+          <input
+            autoFocus
+            type="text"
+            placeholder="Project Name..."
+            value={newProjectName}
+            onChange={e => setNewProjectName(e.target.value)}
+            className="w-full bg-[#1C1B19] border border-[#57544F] rounded p-2 text-sm text-white mb-2 focus:border-[#12B285] outline-none"
+          />
+          <div className="flex justify-end space-x-2">
+            <Button size="sm" variant="ghost" onClick={() => setIsCreating(false)} type="button">Cancel</Button>
+            <Button size="sm" type="submit" className="bg-[#12B285] hover:bg-[#12B285]/80 text-white border-none">Create</Button>
+          </div>
+        </form>
+      )}
+
+      {/* Project List */}
+      <div className="flex-1 overflow-y-auto p-2 space-y-1">
+        {projects.length === 0 && !isCreating && (
+          <div className="text-center text-carta-mist-500 text-xs mt-10">
+            No projects yet.<br />Create one to start uploading.
+          </div>
+        )}
+
+        {projects
+          .filter(project => !project.parent_project_id) // Only show root projects (not sub-folders)
+          .map(project => {
+            const isSelected = selectedProjectId === project.id;
+            const projectAssets = assets.filter(a => a.project_id === project.id && a.type !== LayerType.ANNOTATION);
+            const measurementsSubProjects = projects.filter(p => p.parent_project_id === project.id && p.is_measurements_folder && !p.linked_asset_id);
+
+            return (
+              <div key={project.id} className="rounded-lg overflow-hidden border border-transparent transition-all">
+                {/* Project Header */}
+                <div
+                  onClick={() => !project.is_measurements_folder && onSelectProject(isSelected ? null : project.id)}
+                  className={`flex items-center p-2 cursor-pointer transition-colors rounded-lg mb-1 mx-1 ${isSelected ? 'bg-[#12B285]/10 border border-[#12B285]/30 shadow-sm' : 'hover:bg-[#57544F]/20 border border-transparent'}`}
+                >
+                  {isSelected ? <ChevronDown size={16} className="text-[#12B285] mr-2" /> : <ChevronRight size={16} className="text-gray-400 mr-2" />}
+                  <Folder size={16} className={`mr-2 ${isSelected ? 'text-[#12B285]' : 'text-gray-400'}`} />
+                  <span className={`text-sm font-medium flex-1 truncate ${isSelected ? 'text-white' : 'text-gray-400'}`}>{project.name}</span>
+                  {isSelected && !project.is_measurements_folder && (
+                    <div className="flex items-center gap-1">
+                      {/* Göz butonu - Tüm layer'ları göster/gizle */}
+                      {onToggleAllLayers && projectAssets.length > 0 && (() => {
+                        const allVisible = projectAssets.every(a => a.visible);
+                        return (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onToggleAllLayers(project.id, !allVisible);
+                            }}
+                            className="p-1 text-carta-mist-600 hover:text-white transition"
+                            title={allVisible ? "Hide All Layers" : "Show All Layers"}
+                          >
+                            {allVisible ? <EyeOff size={14} /> : <Eye size={14} />}
+                          </button>
+                        );
+                      })()}
+                      {onShareProject && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onShareProject(project);
+                          }}
+                          className="p-1 text-carta-mist-600 hover:text-carta-forest-400 transition"
+                          title="Share Project"
+                        >
+                          <Share2 size={14} />
+                        </button>
+                      )}
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onDeleteProject(project.id); }}
+                        className="p-1 text-carta-mist-600 hover:text-carta-accent-red transition"
+                        title="Delete Project"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Assets List (Only if project selected) */}
+                {isSelected && !project.is_measurements_folder && (
+                  <div className="pl-4 pr-1 py-1 space-y-1 ml-2 border-l border-white/10 my-1">
+                    {projectAssets.length === 0 && measurementsSubProjects.length === 0 && (
+                      <div className="text-[10px] text-carta-mist-600 italic py-1">Empty project. Upload files.</div>
+                    )}
+
+                    {/* Data Category - Collapsible */}
+                    {projectAssets.length > 0 && (
+                      <div>
+                        <div
+                          onClick={() => toggleCategory(project.id, 'data')}
+                          className="flex items-center p-1.5 cursor-pointer hover:bg-[#57544F]/20 rounded transition-colors"
+                        >
+                          <ChevronRight
+                            size={12}
+                            className={`mr-1.5 text-gray-500 transition-transform ${isCategoryExpanded(project.id, 'data') ? 'rotate-90' : ''}`}
+                          />
+                          <Folder size={12} className="mr-1.5 text-gray-500" />
+                          <span className="text-xs font-medium text-gray-400">Data</span>
+                        </div>
+                        {isCategoryExpanded(project.id, 'data') && (
+                          <div className="pl-4 space-y-1 mt-1">
+                            {/* KML Files */}
+                            {/* KML Files */}
+                            {projectAssets.filter(a => a.type === LayerType.KML).length > 0 && (
+                              <div className="mb-1">
+                                <div className="text-[10px] text-carta-mist-500 font-medium mb-1 px-1">KML Files</div>
+                                {projectAssets.filter(a => a.type === LayerType.KML).map(asset => {
+                                  const isKML = true;
+                                  return (
+                                    <div key={asset.id} className="group flex items-center justify-between p-1.5 rounded hover:bg-[#57544F]/20 transition">
+                                      <div className="flex items-center overflow-hidden flex-1">
+                                        <FileBox size={14} className="text-[#EA580C] mr-2 flex-shrink-0" />
+                                        <span
+                                          className="text-xs truncate flex-1 text-carta-mist-300 cursor-pointer hover:text-[#EA580C] transition-colors"
+                                          title={asset.name}
+                                          onClick={() => {
+                                            if (onLayerClick) onLayerClick(asset.id);
+                                          }}
+                                          onTouchEnd={(e) => {
+                                            // Prevent double-firing on mobile
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            if (onLayerClick) onLayerClick(asset.id);
+                                          }}
+                                        >
+                                          {asset.name}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity space-x-1">
+                                        <button onClick={() => onToggleLayer(asset.id)} className="text-carta-mist-500 hover:text-white" title="Toggle Visibility">
+                                          {asset.visible ? <Eye size={12} /> : <EyeOff size={12} />}
+                                        </button>
+                                        <button onClick={() => onDeleteLayer(asset.id)} className="text-carta-mist-500 hover:text-carta-accent-red" title="Delete">
+                                          <Trash2 size={12} />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+
+                            {/* 3D Tiles */}
+                            {projectAssets.filter(a => a.type === LayerType.TILES_3D).length > 0 && (
+                              <div className="mb-1">
+                                <div className="text-[10px] text-carta-mist-500 font-medium mb-1 px-1">3D Tiles</div>
+                                {projectAssets.filter(a => a.type === LayerType.TILES_3D).map(asset => {
+                                  const tilesetMeasurements = projects.find(p => p.parent_project_id === project.id && p.linked_asset_id === asset.id && p.is_measurements_folder);
+                                  const tilesetMeasurementsAssets = tilesetMeasurements ? assets.filter(a => a.project_id === tilesetMeasurements.id) : [];
+                                  return (
+                                    <div key={asset.id}>
+                                      <div className="group flex flex-col p-1.5 rounded hover:bg-[#57544F]/20 transition">
+                                        <div className="flex items-center justify-between">
+                                          <div className="flex items-center overflow-hidden flex-1">
+                                            <FileBox size={14} className="text-carta-forest-400 mr-2 flex-shrink-0" />
+                                            {editingMeasurementId === asset.id ? (
+                                              <input
+                                                type="text"
+                                                value={editingName}
+                                                onChange={(e) => setEditingName(e.target.value)}
+                                                onKeyDown={(e) => {
+                                                  if (e.key === 'Enter') handleEditSave();
+                                                  if (e.key === 'Escape') handleEditCancel();
+                                                }}
+                                                className="flex-1 bg-[#1C1B19] border border-[#12B285]/50 rounded px-2 py-0.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-[#12B285]/50"
+                                                autoFocus
+                                              />
+                                            ) : (
+                                              <span
+                                                className="text-xs truncate flex-1 text-carta-forest-300 cursor-pointer hover:text-carta-forest-400 transition-colors underline"
+                                                title={asset.name}
+                                                onClick={() => {
+                                                  if (onLayerClick) onLayerClick(asset.id);
+                                                }}
+                                                onTouchEnd={(e) => {
+                                                  // Prevent double-firing on mobile
+                                                  e.preventDefault();
+                                                  e.stopPropagation();
+                                                  if (onLayerClick) onLayerClick(asset.id);
+                                                }}
+                                              >
+                                                {asset.name}
+                                              </span>
+                                            )}
+                                          </div>
+                                          <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity space-x-1">
+                                            {editingMeasurementId === asset.id ? (
+                                              <>
+                                                <button onClick={handleEditSave} className="text-carta-mist-500 hover:text-carta-forest-400" title="Save">
+                                                  <Check size={12} />
+                                                </button>
+                                                <button onClick={handleEditCancel} className="text-carta-mist-500 hover:text-carta-accent-red" title="Cancel">
+                                                  <XIcon size={12} />
+                                                </button>
+                                              </>
+                                            ) : (
+                                              <>
+                                                <button onClick={() => onToggleLayer(asset.id)} className="text-carta-mist-500 hover:text-white" title="Toggle Visibility">
+                                                  {asset.visible ? <Eye size={12} /> : <EyeOff size={12} />}
+                                                </button>
+                                                <button onClick={() => handleEditStart(asset)} className="text-carta-mist-500 hover:text-carta-gold-400" title="Edit Name">
+                                                  <Edit2 size={12} />
+                                                </button>
+                                                <button onClick={() => onDeleteLayer(asset.id)} className="text-carta-mist-500 hover:text-carta-accent-red" title="Delete">
+                                                  <Trash2 size={12} />
+                                                </button>
+                                              </>
+                                            )}
+                                          </div>
+                                        </div>
+
+                                      </div>
+                                      {tilesetMeasurements && tilesetMeasurementsAssets.length > 0 && (
+                                        <div className="pl-4 ml-4 border-l-2 border-carta-gold-600/30 mt-1 mb-2">
+                                          <div className="text-[10px] text-carta-gold-400/70 font-semibold mb-1 flex items-center">
+                                            <Map size={10} className="mr-1" />
+                                            Measurements ({tilesetMeasurementsAssets.length})
+                                          </div>
+                                          {tilesetMeasurementsAssets.map(measurement => (
+                                            <div key={measurement.id} className="group flex items-center justify-between p-1 rounded hover:bg-[#57544F]/20 transition">
+                                              <div className="flex items-center overflow-hidden flex-1">
+                                                <Map size={12} className="text-carta-gold-500 mr-2 flex-shrink-0" />
+                                                {editingMeasurementId === measurement.id ? (
+                                                  <input
+                                                    type="text"
+                                                    value={editingName}
+                                                    onChange={(e) => setEditingName(e.target.value)}
+                                                    onKeyDown={(e) => {
+                                                      if (e.key === 'Enter') handleEditSave();
+                                                      if (e.key === 'Escape') handleEditCancel();
+                                                    }}
+                                                    className="flex-1 bg-carta-deep-700 border border-carta-gold-500 rounded px-2 py-0.5 text-[11px] text-white focus:outline-none focus:ring-1 focus:ring-carta-gold-500"
+                                                    autoFocus
+                                                  />
+                                                ) : (
+                                                  <span className="text-[11px] truncate text-carta-gold-300" title={measurement.name}>
+                                                    {measurement.name}
+                                                  </span>
+                                                )}
+                                              </div>
+                                              <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity space-x-1">
+                                                {editingMeasurementId === measurement.id ? (
+                                                  <>
+                                                    <button onClick={handleEditSave} className="text-carta-mist-500 hover:text-carta-forest-400" title="Save">
+                                                      <Check size={11} />
+                                                    </button>
+                                                    <button onClick={handleEditCancel} className="text-carta-mist-500 hover:text-carta-accent-red" title="Cancel">
+                                                      <XIcon size={11} />
+                                                    </button>
+                                                  </>
+                                                ) : (
+                                                  <>
+                                                    <button onClick={() => onToggleLayer(measurement.id)} className="text-carta-mist-500 hover:text-white" title="Toggle Visibility">
+                                                      {measurement.visible ? <Eye size={11} /> : <EyeOff size={11} />}
+                                                    </button>
+                                                    <button onClick={() => handleEditStart(measurement)} className="text-carta-mist-500 hover:text-carta-gold-400" title="Edit Name">
+                                                      <Edit2 size={11} />
+                                                    </button>
+                                                    <button onClick={() => onDeleteLayer(measurement.id)} className="text-carta-mist-500 hover:text-carta-accent-red" title="Delete">
+                                                      <Trash2 size={11} />
+                                                    </button>
+                                                  </>
+                                                )}
+                                              </div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+
+                            {/* DXF Files */}
+                            {projectAssets.filter(a => a.type === LayerType.DXF).length > 0 && (
+                              <div className="mb-1">
+                                <div className="text-[10px] text-carta-mist-500 font-medium mb-1 px-1">DXF Files</div>
+                                {projectAssets.filter(a => a.type === LayerType.DXF).map(asset => {
+                                  return (
+                                    <div key={asset.id} className="group flex items-center justify-between p-1.5 rounded hover:bg-[#57544F]/20 transition">
+                                      <div className="flex items-center overflow-hidden flex-1">
+                                        <FileBox size={14} className="text-[#EC4899] mr-2 flex-shrink-0" />
+                                        <span
+                                          className="text-xs truncate flex-1 text-gray-300 cursor-pointer hover:text-[#EC4899] transition-colors"
+                                          title={asset.name}
+                                          onClick={() => {
+                                            if (onLayerClick) onLayerClick(asset.id);
+                                          }}
+                                          onTouchEnd={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            if (onLayerClick) onLayerClick(asset.id);
+                                          }}
+                                        >
+                                          {asset.name}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity space-x-1">
+                                        <button onClick={() => onToggleLayer(asset.id)} className="text-carta-mist-500 hover:text-white" title="Toggle Visibility">
+                                          {asset.visible ? <Eye size={12} /> : <EyeOff size={12} />}
+                                        </button>
+                                        <button onClick={() => onDeleteLayer(asset.id)} className="text-carta-mist-500 hover:text-carta-accent-red" title="Delete">
+                                          <Trash2 size={12} />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+
+                            {/* Shapefile Files */}
+                            {projectAssets.filter(a => a.type === LayerType.SHP).length > 0 && (
+                              <div className="mb-1">
+                                <div className="text-[10px] text-carta-mist-500 font-medium mb-1 px-1">Shapefiles</div>
+                                {projectAssets.filter(a => a.type === LayerType.SHP).map(asset => {
+                                  return (
+                                    <div key={asset.id} className="group flex items-center justify-between p-1.5 rounded hover:bg-[#57544F]/20 transition">
+                                      <div className="flex items-center overflow-hidden flex-1">
+                                        <FileBox size={14} className="text-[#06B6D4] mr-2 flex-shrink-0" />
+                                        <span
+                                          className="text-xs truncate flex-1 text-gray-300 cursor-pointer hover:text-[#06B6D4] transition-colors"
+                                          title={asset.name}
+                                          onClick={() => {
+                                            if (onLayerClick) onLayerClick(asset.id);
+                                          }}
+                                          onTouchEnd={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            if (onLayerClick) onLayerClick(asset.id);
+                                          }}
+                                        >
+                                          {asset.name}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity space-x-1">
+                                        <button onClick={() => onToggleLayer(asset.id)} className="text-carta-mist-500 hover:text-white" title="Toggle Visibility">
+                                          {asset.visible ? <Eye size={12} /> : <EyeOff size={12} />}
+                                        </button>
+                                        <button onClick={() => onDeleteLayer(asset.id)} className="text-carta-mist-500 hover:text-carta-accent-red" title="Delete">
+                                          <Trash2 size={12} />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+
+                            {/* GLB/GLTF (Uncoordinated only) */}
+                            {projectAssets.filter(a => a.type === LayerType.GLB_UNCOORD).length > 0 && (
+                              <div className="mb-1">
+                                <div className="text-[10px] text-carta-mist-500 font-medium mb-1 px-1">GLB/GLTF</div>
+                                {projectAssets.filter(a => a.type === LayerType.GLB_UNCOORD).map(asset => {
+                                  return (
+                                    <div key={asset.id} className="group flex items-center justify-between p-1.5 rounded hover:bg-[#57544F]/20 transition">
+                                      <div className="flex items-center overflow-hidden flex-1">
+                                        <Box size={14} className="text-[#A855F7] mr-2 flex-shrink-0" />
+                                        <span
+                                          className="text-xs truncate flex-1 text-gray-300 cursor-pointer hover:text-[#A855F7] transition-colors"
+                                          title={asset.name}
+                                          onClick={() => {
+                                            if (onOpenModelViewer) onOpenModelViewer(asset);
+                                          }}
+                                          onTouchEnd={(e) => {
+                                            // Prevent double-firing on mobile
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            if (onOpenModelViewer) onOpenModelViewer(asset);
+                                          }}
+                                        >
+                                          {asset.name}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity space-x-1">
+                                        {onOpenModelViewer && (
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              onOpenModelViewer(asset);
+                                            }}
+                                            className="text-carta-mist-500 hover:text-purple-400"
+                                            title="View 3D Model"
+                                          >
+                                            <Box size={12} />
+                                          </button>
+                                        )}
+                                        <button onClick={() => onDeleteLayer(asset.id)} className="text-carta-mist-500 hover:text-carta-accent-red" title="Delete">
+                                          <Trash2 size={12} />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Measurements Category - Collapsible */}
+                    {measurementsSubProjects.length > 0 && (
+                      <div>
+                        <div
+                          onClick={() => toggleCategory(project.id, 'measurements')}
+                          className="flex items-center p-1.5 cursor-pointer hover:bg-carta-deep-800/50 rounded transition-colors"
+                        >
+                          <ChevronRight
+                            size={12}
+                            className={`mr-1.5 text-carta-mist-500 transition-transform ${isCategoryExpanded(project.id, 'measurements') ? 'rotate-90' : ''}`}
+                          />
+                          <Folder size={12} className="mr-1.5 text-carta-mist-500" />
+                          <span className="text-xs font-medium text-carta-mist-400">Measurements</span>
+                        </div>
+                        {isCategoryExpanded(project.id, 'measurements') && (
+                          <div className="pl-4 space-y-1 mt-1">
+                            {measurementsSubProjects.map(measurementProject => {
+                              const measurementAssets = assets.filter(a => a.project_id === measurementProject.id);
+                              return measurementAssets.map(measurement => (
+                                <div key={measurement.id} className="group flex items-center justify-between p-1.5 rounded hover:bg-carta-deep-800 transition">
+                                  <div className="flex items-center overflow-hidden flex-1">
+                                    <Map size={14} className="text-carta-gold-500 mr-2 flex-shrink-0" />
+                                    {editingMeasurementId === measurement.id ? (
+                                      <input
+                                        type="text"
+                                        value={editingName}
+                                        onChange={(e) => setEditingName(e.target.value)}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter') handleEditSave();
+                                          if (e.key === 'Escape') handleEditCancel();
+                                        }}
+                                        className="flex-1 bg-carta-deep-700 border border-carta-gold-500 rounded px-2 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-carta-gold-500"
+                                        autoFocus
+                                      />
+                                    ) : (
+                                      <span className="text-xs truncate max-w-[120px] text-carta-gold-300" title={measurement.name}>
+                                        {measurement.name}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity space-x-1">
+                                    {editingMeasurementId === measurement.id ? (
+                                      <>
+                                        <button onClick={handleEditSave} className="text-carta-mist-500 hover:text-carta-forest-400" title="Save">
+                                          <Check size={12} />
+                                        </button>
+                                        <button onClick={handleEditCancel} className="text-carta-mist-500 hover:text-carta-accent-red" title="Cancel">
+                                          <XIcon size={12} />
+                                        </button>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <button onClick={() => onToggleLayer(measurement.id)} className="text-carta-mist-500 hover:text-white" title="Toggle Visibility">
+                                          {measurement.visible ? <Eye size={12} /> : <EyeOff size={12} />}
+                                        </button>
+                                        <button onClick={() => handleEditStart(measurement)} className="text-carta-mist-500 hover:text-carta-gold-400" title="Edit Name">
+                                          <Edit2 size={12} />
+                                        </button>
+                                        <button onClick={() => onDeleteLayer(measurement.id)} className="text-carta-mist-500 hover:text-carta-accent-red" title="Delete">
+                                          <Trash2 size={12} />
+                                        </button>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                              ));
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+
+                  </div>
+                )}
+              </div>
+            );
+          })}
+      </div>
+
+      {/* Storage Usage Footer */}
+      <StorageBar storageConfig={storageConfig || null} maxStorageGB={10} />
+    </div>
+  );
+};

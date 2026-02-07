@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { LayerType, StorageConfig, AssetLayer } from '../../types';
-import { uploadFileAsset, uploadFolderAsset, addUrlAsset } from '../../services/assetService';
-import { NotificationType } from '../../components/Notification';
+import { LayerType, StorageConfig, AssetLayer } from '../types';
+import { uploadFileAsset, uploadFolderAsset, addUrlAsset } from '../services/assetService';
+import { NotificationType } from '../components/common/Notification';
 
 export function useFileUpload(
     selectedProjectId: string | null,

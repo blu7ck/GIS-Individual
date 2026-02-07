@@ -12,7 +12,7 @@ interface UserLocationRendererProps {
     viewer: Cesium.Viewer | null;
     userLocation: UserLocation | null;
     showUserLocation: boolean;
-    flyToUserLocation?: boolean;
+    flyToUserLocation?: number;
     onUserLocationFlyComplete?: () => void;
 }
 
@@ -79,24 +79,38 @@ export const UserLocationRenderer: React.FC<UserLocationRendererProps> = ({
         };
     }, [viewer, userLocation, showUserLocation]);
 
-    // Handle fly to user location
+    // Handle Fly To Request
     useEffect(() => {
-        if (!viewer || viewer.isDestroyed() || !flyToUserLocation || !userLocation) return;
+        if (flyToUserLocation && flyToUserLocation > 0 && userLocation && viewer && !viewer.isDestroyed()) {
+            try {
+                const position = Cesium.Cartesian3.fromDegrees(
+                    userLocation.lng,
+                    userLocation.lat,
+                    1000 // Default height
+                );
 
-        const destination = Cesium.Cartesian3.fromDegrees(
-            userLocation.lng,
-            userLocation.lat,
-            1000 // altitude
-        );
-
-        viewer.camera.flyTo({
-            destination: destination,
-            duration: 2.0,
-            complete: () => {
-                onUserLocationFlyComplete?.();
+                viewer.camera.flyTo({
+                    destination: Cesium.Cartesian3.fromDegrees(
+                        userLocation.lng,
+                        userLocation.lat, // Use 2D view by looking down
+                        2500 // Height in meters
+                    ),
+                    orientation: {
+                        heading: Cesium.Math.toRadians(0),
+                        pitch: Cesium.Math.toRadians(-90),
+                        roll: 0.0
+                    },
+                    duration: 1.5,
+                    complete: () => {
+                        if (onUserLocationFlyComplete) onUserLocationFlyComplete();
+                    }
+                });
+            } catch (error) {
+                console.error('Error flying to user location:', error);
             }
-        });
-    }, [viewer, flyToUserLocation, userLocation, onUserLocationFlyComplete]);
+        }
+    }, [flyToUserLocation, userLocation, viewer, onUserLocationFlyComplete]);
 
-    return null; // This component renders imperatively
+    return null;
+    // This component renders imperatively
 };

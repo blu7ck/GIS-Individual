@@ -1,7 +1,7 @@
 
 import { useEffect } from 'react';
 import { Viewer, CameraEventType, Color } from 'cesium';
-import { QualitySettings } from '../../../../types';
+import { QualitySettings } from '../../../types';
 import { isMobileDevice, isAndroidDevice } from '../utils/performance';
 
 /**

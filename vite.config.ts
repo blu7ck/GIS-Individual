@@ -42,7 +42,7 @@ export default defineConfig(({ mode }) => {
         'urijs',
         'urijs/src/URI',
         'grapheme-splitter',
-        '@zip.js/zip.js',
+        'grapheme-splitter',
         'nosleep.js',
         'meshoptimizer',
         'dompurify',
