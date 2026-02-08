@@ -75,7 +75,7 @@ export const MeasurementRenderer: React.FC<MeasurementRendererProps> = ({
 
             if (!polylineEntityRef.current) {
                 polylineEntityRef.current = viewer.entities.add({
-                    polyline: { positions: polylinePositions, width: 3, material: themeColor, clampToGround: true }
+                    polyline: { positions: polylinePositions, width: 3, material: themeColor, clampToGround: false }
                 });
             } else {
                 polylineEntityRef.current.polyline!.positions = polylinePositions as any;
@@ -106,7 +106,7 @@ export const MeasurementRenderer: React.FC<MeasurementRendererProps> = ({
                         color: Cesium.Color.WHITE, // Distinct White
                         dashLength: 16
                     }),
-                    clampToGround: true
+                    clampToGround: false
                 }
             });
         }
@@ -124,7 +124,12 @@ export const MeasurementRenderer: React.FC<MeasurementRendererProps> = ({
         if (isPolygonMode && points.length >= 3) {
             if (!polygonEntityRef.current) {
                 polygonEntityRef.current = viewer.entities.add({
-                    polygon: { hierarchy: new Cesium.PolygonHierarchy(points), material: themeColor.withAlpha(0.2), outline: false }
+                    polygon: {
+                        hierarchy: new Cesium.PolygonHierarchy(points),
+                        material: themeColor.withAlpha(0.2),
+                        outline: false,
+                        perPositionHeight: true
+                    }
                 });
             } else {
                 polygonEntityRef.current.polygon!.hierarchy = new Cesium.PolygonHierarchy(points) as any;
@@ -148,7 +153,7 @@ export const MeasurementRenderer: React.FC<MeasurementRendererProps> = ({
                         style: Cesium.LabelStyle.FILL_AND_OUTLINE,
                         verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
                         pixelOffset: new Cesium.Cartesian2(0, -15),
-                        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+                        disableDepthTestDistance: 50000, // Show through nearby objects but occlude at distance
                         showBackground: true,
                         backgroundColor: new Cesium.Color(0.1, 0.1, 0.1, 0.8),
                         backgroundPadding: new Cesium.Cartesian2(10, 5)

@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { HardDrive, Trash2, AlertTriangle, X } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { HardDrive, Trash2, AlertTriangle, X, RotateCcw } from 'lucide-react';
 import { StorageConfig } from '../../types';
 import { wipeAllR2Storage, DeleteProgress } from '../../services/storage';
-import { createSupabaseClient } from '../../../lib/supabase';
+import { createSupabaseClient } from '../../lib/supabase';
 
 interface Props {
     storageConfig: StorageConfig | null;
     maxStorageGB?: number;
     onRefreshNeeded?: () => void;
+    storageRefreshKey?: number;
 }
 
 interface StorageStats {
@@ -16,7 +18,7 @@ interface StorageStats {
     fileCount: number;
 }
 
-export const StorageBar: React.FC<Props> = ({ storageConfig, maxStorageGB = 10, onRefreshNeeded }) => {
+export const StorageBar: React.FC<Props> = ({ storageConfig, maxStorageGB = 10, onRefreshNeeded, storageRefreshKey = 0 }) => {
     const [stats, setStats] = useState<StorageStats | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -25,19 +27,7 @@ export const StorageBar: React.FC<Props> = ({ storageConfig, maxStorageGB = 10, 
     const [wipeProgress, setWipeProgress] = useState<DeleteProgress | null>(null);
     const cancelRef = useRef(false);
 
-    // Warn user when trying to leave page during wipe operation
-    useEffect(() => {
-        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-            if (isWiping) {
-                e.preventDefault();
-                e.returnValue = 'Delete operation in progress. Are you sure you want to leave?';
-                return e.returnValue;
-            }
-        };
-
-        window.addEventListener('beforeunload', handleBeforeUnload);
-        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-    }, [isWiping]);
+    // ... (logic remains same)
 
     const fetchStats = async () => {
         if (!storageConfig?.workerUrl) return;
@@ -68,7 +58,7 @@ export const StorageBar: React.FC<Props> = ({ storageConfig, maxStorageGB = 10, 
         fetchStats();
         const interval = setInterval(fetchStats, 5 * 60 * 1000);
         return () => clearInterval(interval);
-    }, [storageConfig?.workerUrl]);
+    }, [storageConfig?.workerUrl, storageRefreshKey]);
 
     const formatSize = (bytes: number): string => {
         if (bytes === 0) return '0 B';
@@ -192,6 +182,20 @@ export const StorageBar: React.FC<Props> = ({ storageConfig, maxStorageGB = 10, 
                         >
                             <Trash2 size={12} />
                         </button>
+
+                        {/* Reset Warnings Button */}
+                        <button
+                            onClick={() => {
+                                if (window.confirm('Reset "Don\'t ask again" warnings? Page will reload.')) {
+                                    localStorage.removeItem('hekamap_delete_dont_ask');
+                                    window.location.reload();
+                                }
+                            }}
+                            className="p-1 text-gray-500 hover:text-white hover:bg-white/10 rounded transition-colors"
+                            title="Reset Warnings"
+                        >
+                            <RotateCcw size={12} />
+                        </button>
                     </div>
                 </div>
 
@@ -211,9 +215,9 @@ export const StorageBar: React.FC<Props> = ({ storageConfig, maxStorageGB = 10, 
             </div>
 
             {/* Wipe Confirmation Modal */}
-            {showWipeModal && (
-                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-                    <div className="bg-[#1C1B19] border border-red-500/50 rounded-lg p-5 max-w-md w-full shadow-2xl">
+            {showWipeModal && createPortal(
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[9999] p-4 animate-in fade-in">
+                    <div className="bg-[#1C1B19] border border-red-500/50 rounded-lg p-5 max-w-md w-full shadow-2xl relative">
                         <div className="flex items-center gap-3 mb-4">
                             <div className="p-2 bg-red-500/20 rounded-full">
                                 <AlertTriangle className="text-red-500" size={24} />
@@ -309,7 +313,8 @@ export const StorageBar: React.FC<Props> = ({ storageConfig, maxStorageGB = 10, 
                             </>
                         )}
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </>
     );

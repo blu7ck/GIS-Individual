@@ -1,15 +1,16 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>FIXURELABS GEOSPATIAL</title>
-    <!-- Favicon -->
-    <link rel="icon" type="image/png" href="/assets/favicon.png" />
-    <link rel="icon" type="image/x-icon" href="/assets/favicon.png" />
-    <link rel="apple-touch-icon" href="/assets/favicon.png" />
-    <link href="https://cesium.com/downloads/cesiumjs/releases/1.136/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
-    <script type="importmap">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>FIXURELABS GEOSPATIAL</title>
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="/assets/favicon.png" />
+  <link rel="icon" type="image/x-icon" href="/assets/favicon.png" />
+  <link rel="apple-touch-icon" href="/assets/favicon.png" />
+  <link href="https://cesium.com/downloads/cesiumjs/releases/1.136/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+  <script type="importmap">
 {
   "imports": {
     "uuid": "https://esm.sh/uuid@^13.0.0",
@@ -24,14 +25,24 @@
   }
 }
 </script>
-    <script>
-      // Must be defined before Cesium imports
-      window.CESIUM_BASE_URL = 'https://cesium.com/downloads/cesiumjs/releases/1.136/Build/Cesium/';
-    </script>
-    <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js"></script>
+  <script>
+    window.CESIUM_BASE_URL = 'https://cesium.com/downloads/cesiumjs/releases/1.136/Build/Cesium/';
+  </script>
+  <!-- Buffer Polyfill for browser compatibility (required for shpjs) -->
+  <script src="https://bundle.run/buffer@6.0.3"></script>
+  <script>
+    window.global = window;
+    window.process = { env: {} };
+    if (typeof window.Buffer === 'undefined' && typeof buffer !== 'undefined') {
+      window.Buffer = buffer.Buffer;
+    }
+  </script>
+  <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js"></script>
 </head>
-  <body>
-    <div id="root"></div>
+
+<body>
+  <div id="root"></div>
   <script type="module" src="/src/index.tsx"></script>
 </body>
+
 </html>

@@ -1,4 +1,4 @@
-import { StorageConfig } from "../types";
+import { StorageConfig, LayerType } from "../types";
 import { logger } from "../utils/logger";
 
 // Interface for the response from the Worker
@@ -10,7 +10,7 @@ interface PresignedResponse {
 /**
  * Uploads a single file using a Presigned URL flow.
  */
-export const uploadToR2 = async (file: File, config: StorageConfig, onProgress?: (progress: number) => void): Promise<string> => {
+export const uploadToR2 = async (file: File, config: StorageConfig, onProgress?: (progress: number) => void, signal?: AbortSignal): Promise<string> => {
   if (!config.workerUrl) {
     throw new Error("Missing Backend Worker URL");
   }
@@ -24,7 +24,7 @@ export const uploadToR2 = async (file: File, config: StorageConfig, onProgress?:
   const { uploadUrl, publicUrl } = await getPresignedUrl(config.workerUrl, key, file.type);
 
   // 3. Perform PUT upload with Retries and Progress
-  await performUpload(uploadUrl, file, 3, onProgress);
+  await performUpload(uploadUrl, file, 3, onProgress, signal);
 
   return publicUrl;
 };
@@ -99,7 +99,7 @@ function getRelativePath(file: File): string {
 /**
  * Uploads a folder (FileList) maintaining structure using Presigned URLs.
  */
-export const uploadFolderToR2 = async (files: FileList, config: StorageConfig, onProgress?: (current: number, total: number) => void): Promise<string> => {
+export const uploadFolderToR2 = async (files: FileList, type: LayerType, config: StorageConfig, onProgress?: (current: number, total: number) => void, signal?: AbortSignal): Promise<string> => {
   if (!config.workerUrl) {
     throw new Error("Missing Backend Worker URL");
   }
@@ -112,51 +112,98 @@ export const uploadFolderToR2 = async (files: FileList, config: StorageConfig, o
   const timestamp = Date.now();
   // Get root folder name or default - using safe helper function
   const rootFolderName = getFolderNameFromFileList(files);
-  const uploadPrefix = `uploads/tilesets/${timestamp}-${rootFolderName}`;
+  const uploadPrefix = `uploads/${type === LayerType.POTREE ? 'pointclouds' : 'tilesets'}/${timestamp}-${rootFolderName}`;
 
-  let tilesetKey = "";
-  let uploadedCount = 0;
-  const totalFiles = files.length;
+  let mainFileKey = "";
 
+  // Progress Tracking (Byte-based)
   const fileArray = Array.from(files);
+  const totalBytes = fileArray.reduce((acc, file) => acc + file.size, 0);
+  const progressMap = new Map<string, number>(); // fileName -> bytesLoaded
+
+  const updateProgress = () => {
+    if (!onProgress) return;
+    const totalLoaded = Array.from(progressMap.values()).reduce((acc, val) => acc + val, 0);
+    // Return accumulated bytes and total bytes
+    onProgress(totalLoaded, totalBytes);
+  };
 
   // Concurrency limit
   const CONCURRENCY = 5;
 
   for (let i = 0; i < fileArray.length; i += CONCURRENCY) {
+    // Check for cancellation before starting a batch
+    if (signal?.aborted) {
+      throw new Error('Upload cancelled');
+    }
+
     const batch = fileArray.slice(i, i + CONCURRENCY);
 
     await Promise.all(batch.map(async (file) => {
+      // Check for cancellation inside the loop (though handled by xhr as well)
+      if (signal?.aborted) return;
+
       const relativePath = getRelativePath(file);
       const s3Key = `${uploadPrefix}/${relativePath}`;
 
-      if (file.name.toLowerCase() === 'tileset.json') {
-        tilesetKey = s3Key;
+      const lowerName = file.name.toLowerCase();
+
+      // Detection logic
+      if (type === LayerType.TILES_3D) {
+        if (lowerName === 'tileset.json') mainFileKey = s3Key;
+      } else if (type === LayerType.POTREE) {
+        if (lowerName === 'cloud.js' || lowerName === 'metadata.json' || lowerName === 'ept.json') {
+          // Prefer cloud.js if multiple exist, or just take the verified one
+          if (!mainFileKey || lowerName === 'cloud.js') {
+            mainFileKey = s3Key;
+          }
+        }
       }
 
       try {
         const { uploadUrl, publicUrl } = await getPresignedUrl(config.workerUrl, s3Key, file.type);
 
-        if (file.name.toLowerCase() === 'tileset.json') {
-          tilesetKey = publicUrl;
+        if (type === LayerType.TILES_3D && lowerName === 'tileset.json') {
+          mainFileKey = publicUrl;
+        } else if (type === LayerType.POTREE && (lowerName === 'cloud.js' || lowerName === 'metadata.json' || lowerName === 'ept.json')) {
+          if (!mainFileKey || lowerName === 'cloud.js' || !mainFileKey.includes('cloud.js')) {
+            mainFileKey = publicUrl;
+          }
         }
 
-        await performUpload(uploadUrl, file);
+        // Pass a file-specific progress callback
+        await performUpload(uploadUrl, file, 3, (filePercent) => {
+          const bytesLoaded = (filePercent / 100) * file.size;
+          progressMap.set(file.name, bytesLoaded);
+          updateProgress();
+        }, signal);
 
-        uploadedCount++;
-        if (onProgress) onProgress(uploadedCount, totalFiles);
+        // Ensure 100% is recorded for this file
+        progressMap.set(file.name, file.size);
+        updateProgress();
+
       } catch (err) {
+        if (signal?.aborted || (err as Error).name === 'AbortError') {
+          throw new Error('Upload cancelled');
+        }
         logger.error(`Failed to upload ${file.name}`, err);
         throw new Error(`Failed to upload critical file: ${file.name}`);
       }
     }));
   }
 
-  if (!tilesetKey) {
-    throw new Error("No tileset.json found in the selected folder.");
+  if (!mainFileKey) {
+    // If cancelled, likely no key
+    if (signal?.aborted) throw new Error('Upload cancelled');
+
+    if (type === LayerType.TILES_3D) {
+      throw new Error("No tileset.json found in the selected folder.");
+    } else {
+      throw new Error("Invalid Octree folder. Missing cloud.js or metadata.json.");
+    }
   }
 
-  return tilesetKey;
+  return mainFileKey;
 };
 
 /**
@@ -213,12 +260,22 @@ export const deleteFromR2 = async (storagePath: string, config: StorageConfig, i
 /**
  * Helper: Execute the PUT request to R2 with Exponential Backoff Retry and Progress.
  */
-async function performUpload(url: string, file: File, retries = 3, onProgress?: (progress: number) => void) {
+async function performUpload(url: string, file: File, retries = 3, onProgress?: (progress: number) => void, signal?: AbortSignal) {
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
+      if (signal?.aborted) throw new Error('Upload cancelled');
+
       const xhr = new XMLHttpRequest();
 
       return new Promise<void>((resolve, reject) => {
+        // Handle AbortSignal
+        if (signal) {
+          signal.addEventListener('abort', () => {
+            xhr.abort();
+            reject(new Error('Upload cancelled'));
+          });
+        }
+
         xhr.upload.addEventListener('progress', (e) => {
           if (e.lengthComputable && onProgress) {
             const progress = (e.loaded / e.total) * 100;
@@ -239,11 +296,18 @@ async function performUpload(url: string, file: File, retries = 3, onProgress?: 
           reject(new Error('Network error'));
         });
 
+        xhr.addEventListener('abort', () => {
+          reject(new Error('Upload cancelled'));
+        });
+
         xhr.open('PUT', url);
         xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
         xhr.send(file);
       });
     } catch (error) {
+      if ((error as Error).message === 'Upload cancelled') {
+        throw error;
+      }
       if (attempt === retries - 1) {
         throw new Error(`Upload failed after ${retries} attempts: ${(error as Error).message}`);
       }

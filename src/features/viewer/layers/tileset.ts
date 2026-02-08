@@ -5,6 +5,7 @@ import {
     Cartesian3,
     Matrix4,
     defined,
+    Ellipsoid,
     EllipsoidTerrainProvider,
     sampleTerrainMostDetailed
 } from 'cesium';
@@ -15,22 +16,19 @@ import { logger } from '../../../../utils/logger';
  * Samples terrain height and adjusts tileset position to sit on ground
  */
 export async function clampTilesetToGround(
-    tileset: Cesium3DTileset & { _hekamapClampedToGround?: boolean },
+    tileset: Cesium3DTileset & { _fixurelabsClampedToGround?: boolean },
     viewer: Viewer,
     retryCount = 0
 ): Promise<void> {
     // Prevent multiple clamps
-    if (tileset._hekamapClampedToGround) return;
+    if (tileset._fixurelabsClampedToGround) return;
 
     const MAX_RETRIES = 10;
-    const INITIAL_RETRY_DELAY = 2000;
-    const MAX_RETRY_DELAY = 15000;
+    const INITIAL_RETRY_DELAY = 1000;
+    const MAX_RETRY_DELAY = 10000;
     const BACKOFF_FACTOR = 1.5;
 
     try {
-        // Modern Cesium does not have readyPromise. 
-        // We rely on the viewer/resium to have loaded it, or check ready.
-        // Casting to any to avoid strict type mismatch if definitions are outdated/mismatched.
         const ts = tileset as any;
 
         if (ts.readyPromise) {
@@ -42,12 +40,10 @@ export async function clampTilesetToGround(
             MAX_RETRY_DELAY
         );
 
-        // Additional wait for bounding sphere
-        await new Promise(resolve => setTimeout(resolve, retryDelay));
-
         if (!ts.ready) {
             if (retryCount < MAX_RETRIES) {
-                setTimeout(() => clampTilesetToGround(tileset, viewer, retryCount + 1), retryDelay);
+                await new Promise(resolve => setTimeout(resolve, retryDelay));
+                return clampTilesetToGround(tileset, viewer, retryCount + 1);
             }
             return;
         }
@@ -64,13 +60,19 @@ export async function clampTilesetToGround(
         const boundingSphere = tileset.boundingSphere;
         if (!boundingSphere || !defined(boundingSphere.center)) {
             if (retryCount < MAX_RETRIES) {
-                setTimeout(() => clampTilesetToGround(tileset, viewer, retryCount + 1), retryDelay);
+                await new Promise(resolve => setTimeout(resolve, retryDelay));
+                return clampTilesetToGround(tileset, viewer, retryCount + 1);
             }
             return;
         }
 
         const center = boundingSphere.center;
         const centerCartographic = Cartographic.fromCartesian(center);
+
+        // Cache original center for stable transformations relative to ground
+        if (!ts._fixurelabsOriginalCenter) {
+            ts._fixurelabsOriginalCenter = Cartesian3.clone(center);
+        }
 
         let terrainHeight: number;
         try {
@@ -88,7 +90,8 @@ export async function clampTilesetToGround(
             }
         } catch (error) {
             if (retryCount < MAX_RETRIES) {
-                setTimeout(() => clampTilesetToGround(tileset, viewer, retryCount + 1), retryDelay);
+                await new Promise(resolve => setTimeout(resolve, retryDelay));
+                return clampTilesetToGround(tileset, viewer, retryCount + 1);
             }
             return;
         }
@@ -96,52 +99,113 @@ export async function clampTilesetToGround(
         const tilesetMinHeight = centerCartographic.height - boundingSphere.radius;
         const heightOffset = terrainHeight - tilesetMinHeight;
 
-        const ADJUSTMENT_THRESHOLD = 0.1;
-        if (Math.abs(heightOffset) < ADJUSTMENT_THRESHOLD) {
-            return;
-        }
+        // Apply clamping translation
+        const surfaceNormal = scene.globe.ellipsoid.geodeticSurfaceNormal(center, new Cartesian3());
+        const worldTranslation = Cartesian3.multiplyByScalar(surfaceNormal, heightOffset, new Cartesian3());
+        const translationMatrix = Matrix4.fromTranslation(worldTranslation, new Matrix4());
 
-        const currentTransform = tileset.root.computedTransform;
-        const baseTransform = currentTransform
-            ? Matrix4.clone(currentTransform)
-            : Matrix4.IDENTITY.clone();
+        // Get the current model matrix
+        const currentTransform = tileset.modelMatrix || Matrix4.IDENTITY;
 
-        const upVector = Cartographic.toCartesian(centerCartographic);
-        const surfaceNormal = Cartesian3.normalize(upVector, new Cartesian3());
+        // Correct Order: Translation * Matrix
+        const clampedMatrix = Matrix4.multiply(translationMatrix, currentTransform, new Matrix4());
 
-        const worldTranslation = Cartesian3.multiplyByScalar(
-            surfaceNormal,
-            heightOffset,
-            new Cartesian3()
-        );
+        // Store FixureLabs specific metadata
+        ts._fixurelabsBaseMatrix = Matrix4.clone(clampedMatrix);
+        ts._fixurelabsClampedToGround = true;
 
-        const translationMatrix = Matrix4.fromTranslation(
-            worldTranslation,
-            new Matrix4()
-        );
+        logger.info(`[Tileset] Clamped successful for ${ts.url || 'tileset'}. Base matrix stored.`);
 
-        const newTransform = Matrix4.multiply(
-            baseTransform,
-            translationMatrix,
-            new Matrix4()
-        );
-
-        const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
-            ('ontouchstart' in window) ||
-            (navigator.maxTouchPoints > 0);
-
-        if (isMobileDevice) {
-            tileset.modelMatrix = newTransform;
-        } else {
-            tileset.root.transform = newTransform;
-        }
-
-        // Extended properties for potential future use (scaling etc)
-        (tileset as any)._hekamapBaseTransform = Matrix4.clone(newTransform);
-        (tileset as any)._hekamapIsMobile = isMobileDevice;
-        (tileset as any)._hekamapGroundClamped = true;
+        // Re-apply any existing transforms (height/scale) using the new base matrix
+        const params = ts._fixurelabsParams || { height: 0, scale: 1.0 };
+        applyTilesetTransform(tileset, params.height, params.scale);
 
     } catch (error) {
-        logger.debug('Error clamping 3D Tiles to ground', error);
+        logger.error('Error clamping 3D Tiles to ground', error);
     }
+}
+
+/**
+ * Applies a manual height offset and scale to a tileset
+ */
+export function applyTilesetTransform(
+    tileset: Cesium3DTileset,
+    height: number,
+    scale: number = 1.0
+): void {
+    const ts = tileset as any;
+
+    // CRITICAL: Ensure tileset is ready before accessing boundingSphere or root
+    // Accessing these properties on an unready tileset can crash Cesium (this._root is undefined)
+    if (!ts.ready) {
+        return;
+    }
+
+    // Store params for re-application after clamping
+    ts._fixurelabsParams = { height, scale };
+
+    // 1. Determine Center
+    // Try to get cached center -> boundingSphere -> root transform
+    let center = ts._fixurelabsOriginalCenter;
+
+    if (!center) {
+        if (tileset.boundingSphere && defined(tileset.boundingSphere.center)) {
+            center = Cartesian3.clone(tileset.boundingSphere.center);
+        } else if (tileset.root && tileset.root.transform) {
+            center = Matrix4.getTranslation(tileset.root.transform, new Cartesian3());
+        }
+
+        // If we found a center, cache it
+        if (center) {
+            ts._fixurelabsOriginalCenter = center;
+        }
+    }
+
+    if (!center) return; // Still no center, cannot transform
+
+    // 2. Prepare Transforms
+    const scaleMatrix = Matrix4.IDENTITY.clone();
+    const heightMatrix = Matrix4.IDENTITY.clone();
+
+    // Scale Logic
+    if (Math.abs(scale - 1.0) > 0.001) {
+        const scaleM = Matrix4.fromUniformScale(scale, new Matrix4());
+        const negCenter = Cartesian3.negate(center, new Cartesian3());
+        const toOrigin = Matrix4.fromTranslation(negCenter, new Matrix4());
+        const fromOrigin = Matrix4.fromTranslation(center, new Matrix4());
+
+        // Scale = Translate(C) * Scale * Translate(-C)
+        Matrix4.multiply(scaleM, toOrigin, scaleMatrix); // temp = S * T(-C)
+        Matrix4.multiply(fromOrigin, scaleMatrix, scaleMatrix); // Final = T(C) * temp
+    }
+
+    // Height Logic
+    if (Math.abs(height) > 0.01) {
+        // Use globe ellipsoid or default WGS84
+        const ellipsoid = (tileset as any)._viewer?.scene.globe.ellipsoid || Ellipsoid.WGS84;
+        const surfaceNormal = ellipsoid.geodeticSurfaceNormal(center, new Cartesian3());
+
+        // Move UP/DOWN along surface normal
+        const offsetVector = Cartesian3.multiplyByScalar(surfaceNormal, height, new Cartesian3());
+        Matrix4.fromTranslation(offsetVector, heightMatrix);
+    }
+
+    // 3. Combine: Height * Scale
+    const transformModifiers = Matrix4.multiply(heightMatrix, scaleMatrix, new Matrix4());
+
+    // 4. Apply to Base
+    // If we have a stored base matrix (from clamping), use it.
+    // If NOT, use the CURRENT modelMatrix as the base (assuming it was the initial state).
+    // But be careful: if we apply repeatedly to modelMatrix without a fixed base, it accumulates.
+    // So we MUST establish a base if it doesn't exist.
+
+    if (!ts._fixurelabsBaseMatrix) {
+        // First time transforming? Snapshot current matrix as base.
+        ts._fixurelabsBaseMatrix = Matrix4.clone(tileset.modelMatrix);
+    }
+
+    const baseMatrix = ts._fixurelabsBaseMatrix;
+    const finalMatrix = Matrix4.multiply(transformModifiers, baseMatrix, new Matrix4());
+
+    tileset.modelMatrix = finalMatrix;
 }

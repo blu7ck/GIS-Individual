@@ -158,7 +158,7 @@ export const SecureLayerPanel: React.FC<Props> = ({
 
                 {/* Footer / Credits */}
                 <div className="p-3 border-t border-slate-700/50 text-[10px] text-slate-500 text-center">
-                    Powered by Hekamap Secure Viewer
+                    Powered by FixureLabs Secure Viewer
                 </div>
 
 

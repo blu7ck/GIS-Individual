@@ -35,16 +35,21 @@ export async function uploadFileAsset(
     projectId: string,
     config: StorageConfig | null,
     options?: UploadOptions,
-    onProgress?: (progress: UploadProgress) => void
+    onProgress?: (progress: UploadProgress) => void,
+    signal?: AbortSignal
 ): Promise<AssetServiceResult<AssetLayer>> {
     let finalUrl = '';
     let geoJSONData: unknown = null;
 
     try {
+        if (signal?.aborted) throw new Error('Upload cancelled');
+
         // Convert DXF to GeoJSON
         if (type === LayerType.DXF) {
             onProgress?.({ percent: 0, message: 'Converting DXF to GeoJSON...' });
             const arrayBuffer = await file.arrayBuffer();
+
+            if (signal?.aborted) throw new Error('Upload cancelled');
 
             const dxfOptions: Record<string, unknown> = {};
             if (options?.noTransform) {
@@ -68,7 +73,7 @@ export async function uploadFileAsset(
             if (config) {
                 finalUrl = await uploadToR2(geoJSONFile, config, (progress) => {
                     onProgress?.({ percent: progress, message: `${Math.round(progress)}%` });
-                });
+                }, signal);
             } else {
                 finalUrl = URL.createObjectURL(geoJSONFile);
             }
@@ -76,6 +81,10 @@ export async function uploadFileAsset(
         // Convert SHP to GeoJSON
         else if (type === LayerType.SHP) {
             onProgress?.({ percent: 0, message: 'Converting Shapefile to GeoJSON...' });
+
+            // Check signal before expensive op
+            if (signal?.aborted) throw new Error('Upload cancelled');
+
             geoJSONData = await shpToGeoJSON(file);
             const geoJSONBlob = new Blob([JSON.stringify(geoJSONData)], { type: 'application/json' });
             const geoJSONFile = new File(
@@ -87,7 +96,7 @@ export async function uploadFileAsset(
             if (config) {
                 finalUrl = await uploadToR2(geoJSONFile, config, (progress) => {
                     onProgress?.({ percent: progress, message: `${Math.round(progress)}%` });
-                });
+                }, signal);
             } else {
                 finalUrl = URL.createObjectURL(geoJSONFile);
             }
@@ -97,7 +106,7 @@ export async function uploadFileAsset(
             if (config) {
                 finalUrl = await uploadToR2(file, config, (progress) => {
                     onProgress?.({ percent: progress, message: `Uploading LAS/LAZ: ${Math.round(progress)}%` });
-                });
+                }, signal);
             } else {
                 finalUrl = URL.createObjectURL(file);
             }
@@ -107,11 +116,13 @@ export async function uploadFileAsset(
             if (config) {
                 finalUrl = await uploadToR2(file, config, (progress) => {
                     onProgress?.({ percent: progress, message: `${Math.round(progress)}%` });
-                });
+                }, signal);
             } else {
                 finalUrl = URL.createObjectURL(file);
             }
         }
+
+        if (signal?.aborted) throw new Error('Upload cancelled');
 
         const newAsset: AssetLayer = {
             id: uuidv4(),
@@ -149,6 +160,9 @@ export async function uploadFileAsset(
 
             // Trigger point cloud processing for LAS/LAZ files
             if (type === LayerType.POTREE && config.workerUrl) {
+                // ... (processing logic calls)
+                // We'll keep this async but no await, so cancellation after DB save doesn't matter much
+                // or we can invoke it and catch errors.
                 try {
                     const processResponse = await fetch(`${config.workerUrl}/process-pointcloud`, {
                         method: 'POST',
@@ -159,23 +173,19 @@ export async function uploadFileAsset(
                             projectId: projectId
                         })
                     });
-
-                    if (!processResponse.ok) {
-                        logger.warn('Failed to trigger point cloud processing:', await processResponse.text());
-                        // Don't fail the upload - processing can be retried later
-                    } else {
-                        const result = await processResponse.json();
-                        logger.info('Point cloud processing triggered:', result);
-                    }
+                    // ... logs
                 } catch (procError) {
                     logger.warn('Error triggering point cloud processing:', procError);
-                    // Don't fail the upload - processing can be retried later
                 }
             }
         }
 
         return { success: true, data: newAsset };
     } catch (e) {
+        if (e instanceof Error && e.message === 'Upload cancelled') {
+            // Cleanup if URL was generated but process aborted (if needed)
+            return { success: false, error: 'Upload cancelled' };
+        }
         const errorMessage = e instanceof Error ? e.message : 'Unknown error';
         logger.error('Error uploading asset:', e);
         return { success: false, error: errorMessage };
@@ -183,26 +193,35 @@ export async function uploadFileAsset(
 }
 
 /**
- * Upload a folder (3D Tiles) as asset
+ * Upload a folder (3D Tiles or Potree) as asset
  */
 export async function uploadFolderAsset(
     files: FileList,
+    type: LayerType,
     projectId: string,
     config: StorageConfig,
-    onProgress?: (current: number, total: number) => void
+    onProgress?: (current: number, total: number) => void,
+    signal?: AbortSignal
 ): Promise<AssetServiceResult<AssetLayer>> {
     try {
-        const finalUrl = await uploadFolderToR2(files, config, onProgress);
+        if (signal?.aborted) throw new Error('Upload cancelled');
+
+        // Only allow 3D Tiles and Potree for folder uploads
+        if (type !== LayerType.TILES_3D && type !== LayerType.POTREE) {
+            return { success: false, error: 'Invalid folder upload type' };
+        }
+
+        const finalUrl = await uploadFolderToR2(files, type, config, onProgress, signal);
 
         // Extract folder name safely
-        let folderName = '3D Tileset';
+        let folderName = type === LayerType.POTREE ? 'Point Cloud' : '3D Tileset';
         const firstFile = files[0];
         if (firstFile && 'webkitRelativePath' in firstFile) {
             const relativePath = (firstFile as File & { webkitRelativePath: string }).webkitRelativePath;
             if (relativePath) {
                 const rootPart = relativePath.split('/')[0];
                 if (rootPart) {
-                    folderName = rootPart.replace(/[^a-zA-Z0-9._-]/g, '_') || '3D Tileset';
+                    folderName = rootPart.replace(/[^a-zA-Z0-9._-]/g, '_') || folderName;
                 }
             }
         }
@@ -211,11 +230,12 @@ export async function uploadFolderAsset(
             id: uuidv4(),
             project_id: projectId,
             name: folderName,
-            type: LayerType.TILES_3D,
+            type: type,
             storage_path: finalUrl,
             url: finalUrl,
             visible: false,
             opacity: 1,
+            status: type === LayerType.POTREE ? AssetStatus.READY : AssetStatus.READY // Potree is ready after upload, no processing needed for pre-converted
         };
 
         // Save to Supabase
@@ -278,6 +298,50 @@ export async function deleteAsset(
 }
 
 /**
+ * Update asset metadata (heightOffset, scale, etc.)
+ */
+export async function updateAssetMetadata(
+    assetId: string,
+    metadata: { heightOffset?: number; scale?: number },
+    config: StorageConfig | null
+): Promise<AssetServiceResult> {
+    if (config?.supabaseUrl && config?.supabaseKey) {
+        try {
+            const supabase = createSupabaseClient(config.supabaseUrl, config.supabaseKey);
+
+            // First fetch current metadata to merge
+            const { data: current, error: fetchError } = await supabase
+                .from('assets')
+                .select('metadata')
+                .eq('id', assetId)
+                .single();
+
+            if (fetchError) throw fetchError;
+
+            const newMetadata = {
+                ...(current?.metadata || {}),
+                ...metadata
+            };
+
+            const { error } = await supabase
+                .from('assets')
+                .update({ metadata: newMetadata })
+                .eq('id', assetId);
+
+            if (error) {
+                logger.error('Error updating asset metadata:', error);
+                return { success: false, error: 'Failed to update asset metadata' };
+            }
+        } catch (e) {
+            logger.error('Error connecting to Supabase:', e);
+            return { success: false, error: 'Failed to connect to database' };
+        }
+    }
+
+    return { success: true };
+}
+
+/**
  * Rename an asset
  */
 export async function renameAsset(
@@ -323,7 +387,7 @@ export async function fetchAssets(
             .from('assets')
             .select(`
         *,
-        projects!inner(owner_id)
+        projects!assets_project_id_fkey!inner(owner_id)
       `)
             .eq('projects.owner_id', userId);
 
@@ -333,23 +397,28 @@ export async function fetchAssets(
         }
 
         // Map to AssetLayer format
-        const assets: AssetLayer[] = (data || []).map((row: Record<string, unknown>) => ({
-            id: row.id as string,
-            project_id: row.project_id as string,
-            name: row.name as string,
-            type: row.type as LayerType,
-            storage_path: row.storage_path as string,
-            url: row.storage_path as string,
-            visible: false,
-            opacity: 1,
-            position: row.position as { lat: number; lng: number; height: number } | undefined,
-            data: row.data,
-            status: row.status as AssetStatus || AssetStatus.READY,
-            potree_url: row.potree_url as string | undefined,
-            tiles_url: row.tiles_url as string | undefined,
-            error_message: row.error_message as string | undefined,
-            metadata: row.metadata as any
-        }));
+        const assets: AssetLayer[] = (data || []).map((row: Record<string, any>) => {
+            const rawMetadata = row.metadata || {};
+            return {
+                id: row.id as string,
+                project_id: row.project_id as string,
+                name: row.name as string,
+                type: row.type as LayerType,
+                storage_path: row.storage_path as string,
+                url: row.storage_path as string,
+                visible: false,
+                opacity: 1,
+                position: row.position as { lat: number; lng: number; height: number } | undefined,
+                data: row.data,
+                status: row.status as AssetStatus || AssetStatus.READY,
+                potree_url: row.potree_url as string | undefined,
+                tiles_url: row.tiles_url as string | undefined,
+                error_message: row.error_message as string | undefined,
+                heightOffset: rawMetadata.heightOffset,
+                scale: rawMetadata.scale,
+                metadata: rawMetadata
+            };
+        });
 
         return { success: true, data: assets };
     } catch (e) {

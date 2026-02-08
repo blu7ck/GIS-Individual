@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Project, AssetLayer, StorageConfig } from '../types';
 import { createProject, deleteProject, fetchProjects } from '../services/projectService';
-import { fetchAssets } from '../services/assetService';
+import { fetchAssets, updateAssetMetadata } from '../services/assetService';
 
 
 interface User {
@@ -45,6 +45,7 @@ export function useProjectData(user: User | null, storageConfig: StorageConfig |
 
     const handleCreateProject = async (name: string) => {
         if (!user) return;
+        console.log('[useProjectData] Creating project with name:', name);
 
         const result = await createProject(name, user.id, storageConfig);
         if (result.success && result.data) {
@@ -72,6 +73,16 @@ export function useProjectData(user: User | null, storageConfig: StorageConfig |
         }
     };
 
+    const handleUpdateAssetMetadata = async (assetId: string, metadata: { heightOffset?: number; scale?: number }) => {
+        const result = await updateAssetMetadata(assetId, metadata, storageConfig);
+        if (result.success) {
+            setAssets(prev => prev.map(a => a.id === assetId ? { ...a, ...metadata } : a));
+            notify('Asset properties updated', 'success');
+        } else {
+            notify(result.error || 'Failed to update asset', 'error');
+        }
+    };
+
     return {
         projects,
         setProjects,
@@ -80,6 +91,7 @@ export function useProjectData(user: User | null, storageConfig: StorageConfig |
         selectedProjectId,
         setSelectedProjectId,
         handleCreateProject,
-        handleDeleteProject
+        handleDeleteProject,
+        handleUpdateAssetMetadata
     };
 }

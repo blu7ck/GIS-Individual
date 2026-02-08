@@ -17,10 +17,32 @@ export const createSupabaseClient = (url: string, key: string): SupabaseClient =
     }
 
     // Create new client and cache it
-    const client = createClient(url, key);
+    const client = createClient(url, key, {
+        auth: {
+            persistSession: true,
+            autoRefreshToken: true,
+            detectSessionInUrl: true
+        }
+    });
     clientCache.set(cacheKey, client);
 
     return client;
+};
+
+export const checkSupabaseConnection = async (url: string, key: string): Promise<boolean> => {
+    try {
+        const client = createSupabaseClient(url, key);
+        // Try to fetch a single row or head - 'projects' table should be accessible to authenticated users
+        const { error } = await client.from('projects').select('id').limit(1);
+        if (error && error.code !== 'PGRST116') { // Ignore "no rows" errors, real connection errors matter
+            console.warn('Supabase connection check failed:', error.message);
+            return false;
+        }
+        return true;
+    } catch (e) {
+        console.error('Supabase connection error:', e);
+        return false;
+    }
 };
 
 // Optional: Clear cache function if needed

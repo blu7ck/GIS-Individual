@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>Potree API Test</title>
+    <link rel="stylesheet" type="text/css" href="./libs/potree.css">
+    <script src="./libs/jquery-3.7.1.min.js"></script>
+    <script src="./libs/three.min.js"></script>
+    <script src="./libs/tween.min.js"></script>
+    <script src="./libs/BinaryHeap.js"></script>
+    <script src="./libs/potree.min.js"></script>
+</head>
+
+<body style="background: black;">
+    <div id="potree_container" style="position: absolute; width: 100%; height: 100%; left: 0px; top: 0px;"></div>
+    <script>
+        window.Potree.scriptPath = './libs';
+        const viewer = new Potree.Viewer(document.getElementById("potree_container"));
+        window.viewer = viewer;
+        console.log("Potree Viewer Initialized", viewer);
+    </script>
+</body>
+
+</html>

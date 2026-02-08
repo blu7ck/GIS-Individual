@@ -180,11 +180,18 @@ function adjustKmlHeightsWithTerrain(datasource: KmlDataSource) {
                     // Drape polygon on terrain
                     entity.polygon.perPositionHeight = new ConstantProperty(false);
                     entity.polygon.heightReference = new ConstantProperty(HeightReference.CLAMP_TO_GROUND);
+                    // Ensure height is not undefined to avoid heightReference warnings
+                    if (!entity.polygon.height) {
+                        entity.polygon.height = new ConstantProperty(0);
+                    }
                 }
 
                 // For polylines: Set clamp to ground
                 if (entity.polyline) {
                     entity.polyline.clampToGround = new ConstantProperty(true);
+                    // CRITICAL: When clampToGround is true, arcType must be GEODESIC or RHUMB
+                    // Defaulting to GEODESIC to avoid DeveloperError: Valid options for arcType are ArcType.GEODESIC and ArcType.RHUMB
+                    (entity.polyline as any).arcType = new ConstantProperty(2); // 2 is Cesium.ArcType.GEODESIC (avoid direct enum access if possible in this context but let's be safe)
                 }
 
                 // For points/billboards: Set relative to ground with vertical offset

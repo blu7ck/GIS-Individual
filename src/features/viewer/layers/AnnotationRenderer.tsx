@@ -66,6 +66,7 @@ export const AnnotationRenderer: React.FC<AnnotationRendererProps> = ({ layers, 
             // Render based on geometry type
             if (geometry.type === 'Point' && points[0]) {
                 newEntities.push(viewer.entities.add({
+                    properties: { layerId: layer.id },
                     position: points[0],
                     point: { pixelSize: 10, color: themeColor, outlineColor: Cesium.Color.WHITE, outlineWidth: 2 },
                     label: {
@@ -82,6 +83,7 @@ export const AnnotationRenderer: React.FC<AnnotationRendererProps> = ({ layers, 
                 }));
             } else if (geometry.type === 'LineString' || geometry.type === 'Polyline') {
                 newEntities.push(viewer.entities.add({
+                    properties: { layerId: layer.id },
                     polyline: {
                         positions: points,
                         width: 3,
@@ -93,6 +95,7 @@ export const AnnotationRenderer: React.FC<AnnotationRendererProps> = ({ layers, 
                 // Label at center
                 const center = points[Math.floor(points.length / 2)];
                 newEntities.push(viewer.entities.add({
+                    properties: { layerId: layer.id },
                     position: center,
                     label: {
                         text,
@@ -108,6 +111,7 @@ export const AnnotationRenderer: React.FC<AnnotationRendererProps> = ({ layers, 
                 }));
             } else if (geometry.type === 'Polygon') {
                 newEntities.push(viewer.entities.add({
+                    properties: { layerId: layer.id },
                     polygon: {
                         hierarchy: points,
                         material: themeColor.withAlpha(0.3),
@@ -124,6 +128,7 @@ export const AnnotationRenderer: React.FC<AnnotationRendererProps> = ({ layers, 
                 // Label at center (roughly)
                 const center = points[0]; // Simple fallback
                 newEntities.push(viewer.entities.add({
+                    properties: { layerId: layer.id },
                     position: center,
                     label: {
                         text,

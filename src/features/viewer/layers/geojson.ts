@@ -41,7 +41,18 @@ export async function flyToGeoJSON(
                     const pos = entity.position.getValue(time);
                     if (pos) allPositions.push(pos);
                 }
-                // Add polyline/polygon positions extraction logic if needed for precise bounds
+                if (entity.polygon && entity.polygon.hierarchy) {
+                    const hierarchy = entity.polygon.hierarchy.getValue(time);
+                    if (hierarchy && hierarchy.positions) {
+                        allPositions.push(...hierarchy.positions);
+                    }
+                }
+                if (entity.polyline && entity.polyline.positions) {
+                    const positions = entity.polyline.positions.getValue(time);
+                    if (positions) {
+                        allPositions.push(...positions);
+                    }
+                }
             });
 
             if (allPositions.length > 0) {

@@ -9,7 +9,6 @@ import { useWebGLContextEvents } from './features/viewer/core/useWebGLContextEve
 import { useConsoleOverrides } from './features/viewer/core/useConsoleOverrides';
 import { useQualitySettings } from './features/viewer/core/useQualitySettings';
 import { useLayers } from './features/viewer/layers/useLayers';
-import { useTilesetTransform } from './features/viewer/layers/useTilesetTransform';
 import { useMeasurement } from './features/viewer/measurement/useMeasurement';
 import { setupViewerDefaults } from './features/viewer/core/setupViewer';
 
@@ -41,6 +40,7 @@ interface Props {
   showUserLocation?: boolean;
   flyToUserLocation?: number;
   onUserLocationFlyComplete?: () => void;
+  onFlyToComplete?: () => void;
   qualitySettings?: QualitySettings;
   className?: string;
   full?: boolean;
@@ -63,6 +63,7 @@ const CesiumViewer: React.FC<Props> = React.memo(({
   showUserLocation = false,
   flyToUserLocation = 0,
   onUserLocationFlyComplete,
+  onFlyToComplete,
   qualitySettings,
   onMouseMove,
   onCameraChange,
@@ -374,17 +375,12 @@ const CesiumViewer: React.FC<Props> = React.memo(({
     viewer: isViewerReady ? viewerRef.current : null,
     layers,
     flyToLayerId: flyToLayerId ?? null,
+    onFlyToComplete,
     qualitySettings: qualitySettings || null,
     onTilesetClick,
     tilesetRefs,
     kmlRefs,
     geoJsonRefs
-  });
-
-  useTilesetTransform({
-    viewer: isViewerReady ? viewerRef.current : null,
-    visibleLayers: layers.filter(l => l.visible),
-    tilesetRefs
   });
 
   const { points, tempPoint, measurementText, measurementPosition, clearMeasurement, finishCurrentMeasurement } = useMeasurement({

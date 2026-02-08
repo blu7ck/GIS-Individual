@@ -410,22 +410,6 @@ export function useMeasurement({ viewer, mode, onMeasurementResult }: UseMeasure
             } catch (e) { return undefined; }
         };
 
-        const correctPickHeight = async (pos: Cartesian3): Promise<Cartesian3> => {
-            if (isMobile) return pos; // Skip on mobile
-
-            try {
-                if (viewer.isDestroyed()) return pos;
-                const tp = scene.terrainProvider;
-                if (!tp || tp instanceof EllipsoidTerrainProvider) return pos;
-
-                const c = Cartographic.fromCartesian(pos);
-                const updated = await sampleTerrainMostDetailed(tp, [c]);
-                if (updated && updated[0] && updated[0].height !== undefined) {
-                    return Cartesian3.fromRadians(c.longitude, c.latitude, updated[0].height + 0.5);
-                }
-            } catch (e) { }
-            return pos;
-        };
 
         handler.setInputAction(async (click: any) => {
             if (!viewer || viewer.isDestroyed()) return;
@@ -433,10 +417,6 @@ export function useMeasurement({ viewer, mode, onMeasurementResult }: UseMeasure
             try {
                 let p = getPick(click.position);
                 if (!p) return;
-
-                if (!isMobile) {
-                    p = await correctPickHeight(p);
-                }
 
                 // Mobile Double Tap
                 if (isMobile) {

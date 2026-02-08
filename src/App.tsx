@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import CesiumViewer from './CesiumViewer';
 import { Auth } from './components/forms/Auth';
 import { ShareModal } from './components/ui/ShareModal';
@@ -45,6 +45,8 @@ const App: React.FC = () => {
     dismissNotification
   } = useUIState();
 
+  const [storageRefreshKey, setStorageRefreshKey] = useState(0);
+
   // 2. Auth State
   const { user, handleLogin } = useAppAuth(notify);
 
@@ -59,6 +61,19 @@ const App: React.FC = () => {
     };
     if (envConfig.workerUrl || envConfig.supabaseUrl || envConfig.supabaseKey) {
       setStorageConfig(envConfig);
+
+      // Verify connection once on mount
+      if (envConfig.supabaseUrl && envConfig.supabaseKey) {
+        import('./lib/supabase').then(({ checkSupabaseConnection }) => {
+          checkSupabaseConnection(envConfig.supabaseUrl, envConfig.supabaseKey).then(connected => {
+            if (connected) {
+              console.log('✅ Supabase Connected');
+            } else {
+              notify('Failed to connect to Supabase. Check credentials.', 'error');
+            }
+          });
+        });
+      }
     }
   }, []);
 
@@ -70,7 +85,8 @@ const App: React.FC = () => {
     selectedProjectId,
     setSelectedProjectId,
     handleCreateProject,
-    handleDeleteProject
+    handleDeleteProject,
+    handleUpdateAssetMetadata
   } = useProjectData(user, storageConfig, notify);
 
   // 5. Feature Hooks
@@ -80,16 +96,15 @@ const App: React.FC = () => {
     uploadProgressPercent,
     handleFileUpload,
     handleFolderUpload,
-    handleUrlAdd
-  } = useFileUpload(selectedProjectId, storageConfig, setAssets, notify, setShowSettings);
+    handleUrlAdd,
+    cancelUpload
+  } = useFileUpload(selectedProjectId, storageConfig, setAssets, notify, setShowSettings, setStorageRefreshKey);
 
   const {
     sharingAsset,
     setSharingAsset,
     sharingProject,
     setSharingProject,
-    handleShareLayer,
-    handleShareProject,
     executeShare,
     executeProjectShare
   } = useSharing(storageConfig, notify);
@@ -98,16 +113,15 @@ const App: React.FC = () => {
 
   const {
     flyToLayerId,
-    handleLayerClick,
+    setFlyToLayerId,
     handleToggleLayer,
     handleDeleteLayer
-  } = useLayerManager(assets, projects, setAssets, storageConfig, notify, _setActiveModelLayer, setActivePotreeLayer);
+  } = useLayerManager(assets, projects, setAssets, storageConfig, notify, _setActiveModelLayer, setActivePotreeLayer, setStorageRefreshKey);
 
   // 6. Map State
   const [mapType, setMapType] = useState<MapType>(MapType.STANDARD);
   const [sceneMode, setSceneMode] = useState<SceneViewMode>(SceneViewMode.SCENE3D);
   const [measurementMode, setMeasurementMode] = useState<MeasurementMode>(MeasurementMode.NONE);
-  const viewerRef = useRef<Cesium.Viewer | null>(null);
   const [cesiumViewerInstance, setCesiumViewerInstance] = useState<Cesium.Viewer | null>(null);
 
   // 6.1 Pending & Cached Measurements
@@ -172,6 +186,7 @@ const App: React.FC = () => {
           res.data.data.mode = pendingMeasurement.mode;
         }
         setAssets(prev => [...prev, res.data!]);
+        setStorageRefreshKey(prev => prev + 1);
         notify('Ölçüm başarıyla kaydedildi', 'success');
       } else if (res.error) {
         notify(res.error, 'error');
@@ -244,9 +259,15 @@ const App: React.FC = () => {
   // Update asset handler (rename, height offset, scale)
   const handleUpdateAsset = useMemo(() => {
     return (id: string, newName: string, updates?: { heightOffset?: number; scale?: number }) => {
+      // 1. Local Update
       setAssets(prev => prev.map(a => a.id === id ? { ...a, name: newName, ...updates } : a));
+
+      // 2. Persistence Update
+      if (updates) {
+        handleUpdateAssetMetadata(id, updates);
+      }
     };
-  }, [setAssets]);
+  }, [setAssets, handleUpdateAssetMetadata]);
 
   // Toggle all layers in a project
   const handleToggleAllLayersInProject = useMemo(() => {
@@ -297,7 +318,14 @@ const App: React.FC = () => {
   if (!user && !isViewerMode) {
     return (
       <>
-        <Auth onLogin={handleLogin} />
+        <>
+          <Auth
+            onLogin={handleLogin}
+            supabaseUrl={storageConfig?.supabaseUrl || import.meta.env.VITE_SUPABASE_URL}
+            supabaseKey={storageConfig?.supabaseKey || import.meta.env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY}
+          />
+          <NotificationContainer notifications={notifications} onDismiss={dismissNotification} />
+        </>
         <NotificationContainer notifications={notifications} onDismiss={dismissNotification} />
       </>
     );
@@ -318,81 +346,101 @@ const App: React.FC = () => {
   // 3. Main App Layout (Engineering)
   return (
     <div className="relative w-full h-screen bg-engineering-bg overflow-hidden">
-      <EngineeringLayout
-        // ... (rest of props)
-        viewer={viewerRef.current}
-        projects={projects}
-        assets={assets}
-        selectedProjectId={selectedProjectId}
-        onSelectProject={setSelectedProjectId}
-        onCreateProject={() => handleCreateProject('New Project')}
-        onDeleteProject={handleDeleteProject}
-        onShareProject={handleShareProject}
-        onLayerClick={handleLayerClick}
-        onToggleLayer={handleToggleLayer}
-        onDeleteLayer={handleDeleteLayer}
-        onShareLayer={handleShareLayer}
-        onUpdateAsset={handleUpdateAsset}
-        onToggleAllLayers={handleToggleAllLayersInProject}
-        onOpenModelViewer={handleOpenViewer}
-        sceneMode={sceneMode}
-        setSceneMode={setSceneMode}
-        activePopup={activePopup}
-        setActivePopup={setActivePopup}
-        measurementMode={measurementMode}
-        setMeasurementMode={setMeasurementMode}
-        onUpload={handleFileUpload}
-        onFolderUpload={handleFolderUpload}
-        onUrlAdd={(url, type) => handleUrlAdd(url, type, url.split('/').pop() || 'New Layer')}
-        isUploading={isUploading}
-        uploadProgress={typeof uploadProgress === 'number' ? `${uploadProgress}%` : uploadProgress}
-        uploadProgressPercent={uploadProgressPercent}
-        mapType={mapType}
-        setMapType={setMapType}
-        qualitySettings={qualitySettings}
-        setQualitySettings={setQualitySettings}
-        isTracking={geolocation.isTracking}
-        onStartTracking={geolocation.startTracking}
-        onStopTracking={geolocation.stopTracking}
-        hasPosition={!!geolocation.position}
-        mouseCoordinates={mouseCoords}
-        cameraHeight={cameraHeight}
-        isViewerMode={isViewerMode}
-        onFlyToLocation={() => setFlyToUserLocation(Date.now())}
-        viewer={cesiumViewerInstance}
-      >
-        <CesiumViewer
-          className="w-full h-full"
-          full
-          sceneMode={sceneMode}
-          mapType={mapType}
-          layers={allLayers}
-          flyToLayerId={flyToLayerId}
-          measurementMode={measurementMode}
-          onMeasurementResult={(text, geometry, mode) => {
-            // Safe check if mode is provided
-            if (mode) handleMeasurementResult(text, geometry, mode);
-          }}
-          onExitMeasurement={() => setMeasurementMode(MeasurementMode.NONE)}
-          onHeightOffsetChange={handleHeightOffsetChange}
-          userLocation={userLocation}
-          showUserLocation={showUserLocation}
-          flyToUserLocation={flyToUserLocation}
-          onUserLocationFlyComplete={() => setFlyToUserLocation(0)}
-          qualitySettings={qualitySettings}
-          onMouseMove={handleMouseMove}
-          onCameraChange={handleCameraChange}
-          onViewerReady={setCesiumViewerInstance}
+      {/*
+        Potree Viewer - Exclusive Mode
+        When active, EngineeringLayout and CesiumViewer are unmounted to free WebGL resources.
+      */}
+      {activePotreeLayer ? (
+        <PotreeViewer
+          layer={activePotreeLayer}
+          onClose={() => setActivePotreeLayer(null)}
         />
+      ) : (
+        <EngineeringLayout
+          projects={projects}
+          assets={allLayers}
+          selectedProjectId={selectedProjectId}
+          storageConfig={storageConfig || null}
 
-        {/* Potree Switch UI */}
-        {activePotreeLayer && (
-          <PotreeViewer
-            layer={activePotreeLayer}
-            onClose={() => setActivePotreeLayer(null)}
+          // Project Actions
+          onSelectProject={setSelectedProjectId}
+          onCreateProject={handleCreateProject}
+          onDeleteProject={handleDeleteProject}
+          onShareProject={project => setSharingProject(project)}
+
+          // Layer Actions
+          onLayerClick={(id) => setFlyToLayerId(id)}
+          onToggleLayer={handleToggleLayer}
+          onDeleteLayer={handleDeleteLayer}
+          onShareLayer={layer => setSharingAsset(layer)}
+          onToggleAllLayers={handleToggleAllLayersInProject}
+          onOpenModelViewer={(asset) => {
+            if (asset.potree_url || asset.type === LayerType.POTREE || asset.type === LayerType.LAS) {
+              setActivePotreeLayer(asset);
+            }
+          }}
+          onUpdateAsset={handleUpdateAsset}
+
+          // View State
+          sceneMode={sceneMode}
+          setSceneMode={setSceneMode}
+          isViewerMode={isViewerMode}
+
+          // Popup & Tool State
+          activePopup={activePopup}
+          setActivePopup={setActivePopup}
+          measurementMode={measurementMode}
+          setMeasurementMode={setMeasurementMode}
+
+          // Upload Props
+          onUpload={handleFileUpload}
+          onFolderUpload={handleFolderUpload}
+          onUrlAdd={(url, type) => handleUrlAdd(url, type, url.split('/').pop() || 'New Layer')}
+          onCancelUpload={cancelUpload}
+          isUploading={isUploading}
+          uploadProgress={typeof uploadProgress === 'number' ? `${uploadProgress}%` : uploadProgress}
+          uploadProgressPercent={uploadProgressPercent}
+
+          // Map Settings
+          mapType={mapType}
+          setMapType={setMapType}
+          qualitySettings={qualitySettings}
+          setQualitySettings={setQualitySettings}
+          isTracking={geolocation.isTracking}
+          onStartTracking={geolocation.startTracking}
+          onStopTracking={geolocation.stopTracking}
+          onFlyToComplete={() => setFlyToLayerId(null)}
+          hasPosition={!!geolocation.position}
+          mouseCoordinates={mouseCoords}
+          cameraHeight={cameraHeight}
+          onFlyToLocation={() => setFlyToUserLocation(Date.now())}
+          viewer={cesiumViewerInstance}
+        >
+          <CesiumViewer
+            className="w-full h-full"
+            full
+            sceneMode={sceneMode}
+            mapType={mapType}
+            layers={allLayers}
+            flyToLayerId={flyToLayerId}
+            measurementMode={measurementMode}
+            onMeasurementResult={(text, geometry, mode) => {
+              // Safe check if mode is provided
+              if (mode) handleMeasurementResult(text, geometry, mode);
+            }}
+            onExitMeasurement={() => setMeasurementMode(MeasurementMode.NONE)}
+            onHeightOffsetChange={handleHeightOffsetChange}
+            userLocation={userLocation}
+            showUserLocation={showUserLocation}
+            flyToUserLocation={flyToUserLocation}
+            onUserLocationFlyComplete={() => setFlyToUserLocation(0)}
+            qualitySettings={qualitySettings}
+            onMouseMove={handleMouseMove}
+            onCameraChange={handleCameraChange}
+            onViewerReady={setCesiumViewerInstance}
           />
-        )}
-      </EngineeringLayout>
+        </EngineeringLayout>
+      )}
 
 
       {/* Save Modal for Naming */}

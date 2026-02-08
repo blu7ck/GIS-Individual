@@ -68,6 +68,7 @@ interface EngineeringLayoutProps {
     onUpload: (file: File, type: LayerType, options?: Record<string, unknown>) => void;
     onFolderUpload: (files: FileList, type: LayerType) => void;
     onUrlAdd: (url: string, type: LayerType) => void;
+    onCancelUpload?: () => void;
     isUploading: boolean;
     uploadProgress?: string;
     uploadProgressPercent: number;
@@ -84,6 +85,7 @@ interface EngineeringLayoutProps {
     onStopTracking: () => void;
     hasPosition: boolean;
     onFlyToLocation?: () => void;
+    onFlyToComplete?: () => void;
 
 
     // Status Data
@@ -125,6 +127,7 @@ export const EngineeringLayout: React.FC<EngineeringLayoutProps> = ({
     onUpload,
     onFolderUpload,
     onUrlAdd,
+    onCancelUpload,
     isUploading,
     uploadProgress,
     uploadProgressPercent,
@@ -139,7 +142,8 @@ export const EngineeringLayout: React.FC<EngineeringLayoutProps> = ({
     onFlyToLocation,
     mouseCoordinates,
     cameraHeight,
-    viewer
+    viewer,
+    onFlyToComplete
 }) => {
     // ========================================================================
     // STATE
@@ -171,7 +175,12 @@ export const EngineeringLayout: React.FC<EngineeringLayoutProps> = ({
 
             {/* Map Viewport */}
             <div className="absolute inset-0">
-                {children}
+                {React.Children.map(children, child => {
+                    if (React.isValidElement(child)) {
+                        return React.cloneElement(child as React.ReactElement<any>, { onFlyToComplete });
+                    }
+                    return child;
+                })}
             </div>
 
             {/* UI Overlay - Only in non-viewer mode */}
@@ -202,6 +211,7 @@ export const EngineeringLayout: React.FC<EngineeringLayoutProps> = ({
                                 onOpenModelViewer={onOpenModelViewer}
                                 onUpdateAsset={onUpdateAsset}
                                 onOpenUpload={() => setActivePopup('upload')}
+                                onCancelUpload={onCancelUpload}
                                 isUploading={isUploading}
                                 uploadProgress={uploadProgress}
                                 uploadProgressPercent={uploadProgressPercent}

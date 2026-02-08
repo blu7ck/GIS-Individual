@@ -33,7 +33,9 @@ function isFeature(obj: unknown): obj is Feature<Geometry> {
 export const shpToGeoJSON = async (zipFile: File | Blob): Promise<FeatureCollection> => {
   try {
     const arrayBuffer = await zipFile.arrayBuffer();
-    const geojson: unknown = await shp.parseZip(arrayBuffer);
+    // shpjs can sometimes be confused if passed raw File in some contexts, but passing arrayBuffer explicitly to parseZip is safer
+    // Also ensuring we use the default export correctly
+    const geojson: unknown = await shp.parseZip(arrayBuffer as any);
 
     // shpjs sometimes returns an array
     if (Array.isArray(geojson)) {

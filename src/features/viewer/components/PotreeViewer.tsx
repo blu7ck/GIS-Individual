@@ -1,74 +1,143 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { X, Settings, Layers, Box, Maximize2, Move, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
+import { X, Loader2, AlertCircle, Box } from 'lucide-react';
 import { AssetLayer, AssetStatus } from '../../../types';
+import { loadPotreeDependencies } from '../utils/scriptLoader';
+import { PotreeCameraControls } from './PotreeCameraControls';
+import { PotreeToolbar } from './PotreeToolbar';
 
 interface PotreeViewerProps {
     layer: AssetLayer;
     onClose: () => void;
 }
 
+declare global {
+    interface Window {
+        Potree: any;
+        THREE: any;
+    }
+}
+
 /**
  * PotreeViewer - Advanced Point Cloud Analysis Tool
- * This viewer is optimized for large-scale LiDAR data.
+ * Dynamically loads Potree libraries and renders the point cloud.
  */
 export const PotreeViewer: React.FC<PotreeViewerProps> = ({ layer, onClose }) => {
     const potreeContainerRef = useRef<HTMLDivElement>(null);
     const [viewerState, setViewerState] = useState<'loading' | 'ready' | 'error' | 'processing'>('loading');
+    const [scriptsLoaded, setScriptsLoaded] = useState(false);
+    const [potreeViewer, setPotreeViewer] = useState<any>(null);
+    const viewerRef = useRef<any>(null);
 
     // Determine the correct URL to use
+    // Potree needs the 'cloud.js' or 'metadata.json' URL
     const pointCloudUrl = layer.potree_url || layer.tiles_url || layer.url;
     const isProcessing = layer.status === AssetStatus.PROCESSING;
     const hasError = layer.status === AssetStatus.ERROR;
 
+    // 1. Load Scripts
     useEffect(() => {
-        if (!potreeContainerRef.current) return;
+        let mounted = true;
 
-        if (isProcessing) {
+        const loadScripts = async () => {
+            // If already loaded globally, just proceed
+            if (window.Potree && window.THREE) {
+                setScriptsLoaded(true);
+                return;
+            }
+
+            try {
+                await loadPotreeDependencies();
+                if (mounted) setScriptsLoaded(true);
+            } catch (err) {
+                console.error("Failed to load Potree scripts:", err);
+                if (mounted) setViewerState('error');
+            }
+        };
+
+        if (!isProcessing && !hasError && pointCloudUrl) {
+            loadScripts();
+        } else if (isProcessing) {
             setViewerState('processing');
-            return;
-        }
-
-        if (hasError) {
+        } else if (hasError) {
             setViewerState('error');
-            return;
         }
 
-        if (!pointCloudUrl) {
+        return () => { mounted = false; };
+    }, [isProcessing, hasError, pointCloudUrl]);
+
+    // 2. Initialize Potree & Load Point Cloud
+    useEffect(() => {
+        if (!scriptsLoaded || !potreeContainerRef.current || !pointCloudUrl) return;
+        if (viewerRef.current) return; // Already initialized
+
+        console.log('[PotreeViewer] Initializing Viewer...');
+
+        try {
+            // Check availability
+            if (!window.Potree) {
+                console.error("Potree globabl object not found!");
+                setViewerState('error');
+                return;
+            }
+
+            // Initialize Viewer
+            const viewer = new window.Potree.Viewer(potreeContainerRef.current);
+            viewerRef.current = viewer;
+            setPotreeViewer(viewer); // Trigger UI updates
+
+            viewer.setEDLEnabled(true);
+            viewer.setFOV(60);
+            viewer.setPointBudget(2_000_000); // 2M points
+            viewer.loadSettingsFromURL();
+
+            // Hide Standard Potree UI elements we don't want
+            viewer.setDescription("");
+
+            // Potree 1.8: Load Point Cloud
+            window.Potree.loadPointCloud(pointCloudUrl, layer.name, (e: any) => {
+                const pointcloud = e.pointcloud;
+                const material = pointcloud.material;
+
+                material.size = 1;
+                material.pointSizeType = window.Potree.PointSizeType.ADAPTIVE;
+                material.shape = window.Potree.PointShape.SQUARE;
+
+                viewer.scene.addPointCloud(pointcloud);
+                viewer.fitToScreen();
+
+                setViewerState('ready');
+                console.log('[PotreeViewer] Point cloud loaded successfully');
+            });
+
+        } catch (err) {
+            console.error('[PotreeViewer] Error initializing viewer:', err);
             setViewerState('error');
-            return;
         }
-
-        console.log('[PotreeViewer] Initializing with URL:', pointCloudUrl);
-        setViewerState('loading');
-
-        // TODO: Full Potree integration
-        // 1. Load Potree library dynamically
-        // 2. Initialize THREE.js scene
-        // 3. Load point cloud from pointCloudUrl
-        // For now, we show a placeholder
 
         return () => {
-            console.log('[PotreeViewer] Cleaning up');
+            // Cleanup if necessary
+            console.log('[PotreeViewer] Unmounting...');
+            viewerRef.current = null;
+            setPotreeViewer(null);
         };
-    }, [pointCloudUrl, isProcessing, hasError]);
+
+    }, [scriptsLoaded, pointCloudUrl, layer.name]);
+
+
+    // --- Render Helpers ---
 
     const renderViewportContent = () => {
         if (viewerState === 'processing') {
             return (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                <div className="absolute inset-0 flex items-center justify-center bg-black/80 backdrop-blur-md z-50">
                     <div className="text-center space-y-4 max-w-md">
-                        <Loader2 className="w-12 h-12 text-purple-500 animate-spin mx-auto" />
+                        <Loader2 className="w-12 h-12 text-blue-500 animate-spin mx-auto" />
                         <div className="space-y-2">
-                            <p className="text-white/90 font-semibold">Nokta Bulutu İşleniyor</p>
+                            <p className="text-white/90 font-semibold text-lg">Nokta Bulutu İşleniyor</p>
                             <p className="text-white/50 text-sm">
-                                LAS/LAZ dosyanız sunucuda Potree ve 3D Tiles formatına dönüştürülüyor.
-                                Bu işlem dosya boyutuna göre 10-45 dakika sürebilir.
+                                Dosyanız görüntüleme için hazırlanıyor. Bu işlem dosya boyutuna göre biraz zaman alabilir.
                             </p>
                         </div>
-                        <button className="flex items-center gap-2 px-4 py-2 mx-auto bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/30 rounded-lg text-purple-400 text-sm transition-all">
-                            <RefreshCw size={14} />
-                            <span>Durumu Yenile</span>
-                        </button>
                     </div>
                 </div>
             );
@@ -76,104 +145,91 @@ export const PotreeViewer: React.FC<PotreeViewerProps> = ({ layer, onClose }) =>
 
         if (viewerState === 'error') {
             return (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                <div className="absolute inset-0 flex items-center justify-center bg-black/80 backdrop-blur-md z-50">
                     <div className="text-center space-y-4 max-w-md">
                         <AlertCircle className="w-12 h-12 text-red-500 mx-auto" />
                         <div className="space-y-2">
-                            <p className="text-white/90 font-semibold">İşlem Başarısız</p>
+                            <p className="text-white/90 font-semibold text-lg">Yükleme Başarısız</p>
                             <p className="text-white/50 text-sm">
-                                {layer.error_message || 'Nokta bulutu işlenirken bir hata oluştu.'}
+                                Potree kütüphaneleri veya nokta bulutu dosyası yüklenemedi.
                             </p>
+                            <p className="text-xs text-red-400/50 break-all">{pointCloudUrl}</p>
+                        </div>
+                        <button onClick={onClose} className="px-6 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-white transition-colors">
+                            Kapat
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+
+        if (viewerState === 'loading') {
+            return (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/80 backdrop-blur-md z-50">
+                    <div className="text-center space-y-4">
+                        <div className="w-16 h-16 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin mx-auto" />
+                        <div className="space-y-1">
+                            <p className="text-white/90 font-medium">Potree Viewer Yükleniyor...</p>
+                            <p className="text-white/40 text-xs font-mono">Modüller hazırlanıyor</p>
                         </div>
                     </div>
                 </div>
             );
         }
 
-        // Loading or ready state
-        return (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-                <div className="text-center space-y-4">
-                    <div className="w-12 h-12 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin mx-auto" />
-                    <div className="space-y-1">
-                        <p className="text-white/80 font-medium">Nokta Bulutu Yükleniyor...</p>
-                        <p className="text-white/40 text-xs font-mono">{layer.name}</p>
-                        {pointCloudUrl && (
-                            <p className="text-white/20 text-xs font-mono truncate max-w-xs">
-                                {pointCloudUrl.split('/').slice(-2).join('/')}
-                            </p>
-                        )}
-                    </div>
-                </div>
-            </div>
-        );
+        return null;
     };
 
     return (
         <div className="absolute inset-0 z-50 bg-[#0a0a0a] flex flex-col animate-in fade-in duration-300">
-            {/* Control Bar */}
-            <div className="flex items-center justify-between px-6 py-3 bg-[#1a1a1a] border-b border-white/10 shadow-lg">
-                <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2 px-3 py-1 bg-purple-500/10 border border-purple-500/20 rounded-full">
-                        <Box size={14} className="text-purple-400" />
-                        <span className="text-xs font-semibold text-purple-400 uppercase tracking-wider">Potree Analyzer</span>
-                    </div>
-                    <h2 className="text-sm font-medium text-white/90">{layer.name}</h2>
-                    {isProcessing && (
-                        <span className="flex items-center gap-1 px-2 py-0.5 bg-yellow-500/10 border border-yellow-500/20 rounded text-yellow-500 text-xs">
-                            <Loader2 size={10} className="animate-spin" />
-                            Processing
-                        </span>
-                    )}
-                </div>
-
-                <div className="flex items-center gap-2">
-                    {/* Tool Group */}
-                    <div className="flex items-center gap-1 p-1 bg-black/30 rounded-lg border border-white/5 mr-4">
-                        <button className="p-2 hover:bg-white/10 rounded-md text-white/60 disabled:opacity-30" title="Measure" disabled={viewerState !== 'ready'}><Move size={16} /></button>
-                        <button className="p-2 hover:bg-white/10 rounded-md text-white/60 disabled:opacity-30" title="Clip" disabled={viewerState !== 'ready'}><Box size={16} /></button>
-                        <button className="p-2 hover:bg-white/10 rounded-md text-white/60 disabled:opacity-30" title="Layers" disabled={viewerState !== 'ready'}><Layers size={16} /></button>
-                        <button className="p-2 hover:bg-white/10 rounded-md text-white/60 disabled:opacity-30" title="Settings" disabled={viewerState !== 'ready'}><Settings size={16} /></button>
-                    </div>
-
-                    <button
-                        onClick={onClose}
-                        className="flex items-center gap-2 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-md text-red-400 text-xs font-medium transition-all"
-                    >
-                        <span>Cesium'a Dön</span>
-                        <X size={14} />
-                    </button>
-                </div>
-            </div>
+            {/* Loading/Error Overlays */}
+            {renderViewportContent()}
 
             {/* Main Viewport */}
             <div
                 ref={potreeContainerRef}
-                className="flex-1 relative cursor-crosshair"
+                className="flex-1 relative cursor-crosshair overflow-hidden"
+                style={{ width: '100%', height: '100%' }}
             >
-                {renderViewportContent()}
-            </div>
+                {/* 1. Back to Cesium Button - Vertical Center Right */}
+                <div className="absolute top-1/2 right-4 transform -translate-y-1/2 z-[100]">
+                    <button
+                        onClick={onClose}
+                        className="group flex flex-col items-center justify-center w-12 h-24 bg-black/60 hover:bg-red-500/90 backdrop-blur-md border border-white/10 rounded-full text-white/80 hover:text-white transition-all shadow-xl"
+                        title="Cesium Haritasına Dön"
+                    >
+                        <X size={28} className="mb-2" />
+                        <span className="text-[10px] font-bold uppercase tracking-wider -rotate-90 whitespace-nowrap">Çıkış</span>
+                    </button>
+                </div>
 
-            {/* Property Bar */}
-            <div className="px-6 py-2 bg-[#141414] border-t border-white/5 flex items-center justify-between">
-                <div className="flex items-center gap-6">
-                    <div className="flex flex-col">
-                        <span className="text-[10px] text-white/30 uppercase">Points</span>
-                        <span className="text-xs text-white/70 font-mono">{layer.metadata?.pointCount?.toLocaleString() || '---'}</span>
-                    </div>
-                    <div className="flex flex-col border-l border-white/10 pl-6">
-                        <span className="text-[10px] text-white/30 uppercase">Status</span>
-                        <span className="text-xs text-white/70 font-mono">{layer.status || 'READY'}</span>
-                    </div>
-                    <div className="flex flex-col border-l border-white/10 pl-6">
-                        <span className="text-[10px] text-white/30 uppercase">Format</span>
-                        <span className="text-xs text-white/70 font-mono">{layer.potree_url ? 'Potree' : layer.tiles_url ? '3D Tiles' : 'Raw'}</span>
+                {/* 2. Header Overlay - Top Left */}
+                {/* Kept for context metadata */}
+                <div className="absolute top-4 left-4 z-[90] bg-black/40 backdrop-blur-md border border-white/10 rounded-lg p-3 shadow-lg pointer-events-none">
+                    <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2 px-2 py-1 bg-blue-500/20 border border-blue-500/30 rounded text-blue-300">
+                            <Box size={14} />
+                            <span className="text-xs font-bold uppercase tracking-wider">Potree 1.8</span>
+                        </div>
+                        <div>
+                            <h2 className="text-sm font-bold text-white leading-none">{layer.name}</h2>
+                            <div className="flex items-center gap-2 mt-1">
+                                <span className="text-[10px] text-white/50 font-mono">
+                                    {viewerState === 'ready' ? 'Ready' : 'Initializing...'}
+                                </span>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                <div className="flex items-center gap-3">
-                    <button className="p-1.5 text-white/20 hover:text-white/60 transition-colors"><Maximize2 size={14} /></button>
-                </div>
+                {/* 3. Custom UI Components */}
+                {viewerState === 'ready' && potreeViewer && (
+                    <>
+                        <PotreeCameraControls viewer={potreeViewer} />
+                        <PotreeToolbar viewer={potreeViewer} />
+                    </>
+                )}
+
             </div>
         </div>
     );

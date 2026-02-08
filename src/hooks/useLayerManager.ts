@@ -10,7 +10,8 @@ export function useLayerManager(
     storageConfig: StorageConfig | null,
     notify: (msg: string, type: NotificationType) => void,
     setActiveModelLayer: (layer: AssetLayer | null) => void,
-    setActivePotreeLayer: (layer: AssetLayer | null) => void
+    setActivePotreeLayer: (layer: AssetLayer | null) => void,
+    setStorageRefreshKey?: React.Dispatch<React.SetStateAction<number>>
 ) {
     const [flyToLayerId, setFlyToLayerId] = useState<string | null>(null);
 
@@ -31,28 +32,17 @@ export function useLayerManager(
         }
 
         // DXF/SHP/KML/Tiles all behave similarly for visibility toggle + flyTo
-        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
-            ('ontouchstart' in window) ||
-            (navigator.maxTouchPoints > 0);
 
         if (!layer.visible) {
             setAssets(prev => prev.map(a =>
                 a.id === layerId ? { ...a, visible: true } : a
             ));
 
-            // Delay for mobile/load time
-            let delay = 500;
-            if (layer.type === LayerType.KML) delay = isMobile ? 1000 : 500;
-            if (layer.type === LayerType.TILES_3D) delay = isMobile ? 600 : 200;
-            if (layer.type === LayerType.DXF || layer.type === LayerType.SHP) delay = isMobile ? 1000 : 500;
-
-            setTimeout(() => {
-                setFlyToLayerId(layerId);
-                setTimeout(() => setFlyToLayerId(null), 100);
-            }, delay);
+            // Set flyTo immediately or with slight delay if we want to ensure visibility toggle state reaches Cesium
+            // But we removed the timeout clearing, useLayers will clear it.
+            setFlyToLayerId(layerId);
         } else {
             setFlyToLayerId(layerId);
-            setTimeout(() => setFlyToLayerId(null), 100);
         }
     };
 
@@ -86,7 +76,8 @@ export function useLayerManager(
     };
 
     const handleDeleteLayer = async (id: string) => {
-        if (!window.confirm("Are you sure? This will permanently delete the file.")) return;
+        // Confirmation handles by UI
+
 
         const asset = assets.find(a => a.id === id);
         if (!asset) return;
@@ -95,7 +86,8 @@ export function useLayerManager(
 
         if (result.success) {
             setAssets(prev => prev.filter(a => a.id !== id));
-            notify('Asset deleted', 'success');
+            setStorageRefreshKey?.(prev => prev + 1);
+            notify("Layer deleted", "success");
         } else {
             notify(result.error || 'Failed to delete asset', 'error');
         }

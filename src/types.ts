@@ -15,7 +15,8 @@ export enum LayerType {
   GLB_UNCOORD = 'GLB_UNCOORD',
   TILES_3D = 'TILES_3D',
   ANNOTATION = 'ANNOTATION', // New type for saved drawings
-  POTREE = 'POTREE' // Dedicated Potree point cloud format
+  POTREE = 'POTREE', // Processed Octree (cloud.js / metadata.json)
+  LAS = 'LAS' // Raw Point Cloud (LAS/LAZ)
 }
 
 export enum AssetStatus {
@@ -66,6 +67,7 @@ export interface AssetLayer {
     pointCount?: number;
     formatVersion?: string;
     boundingBox?: any;
+    heightOffset?: number;
   };
 }
 
