@@ -1,0 +1,22 @@
+[
+    {
+        "AllowedOrigins": [
+            "http://localhost:3000",
+            "https://test.fixurelabs.dev",
+            "https://gis-individual.fixurelabs.dev"
+        ],
+        "AllowedMethods": [
+            "PUT",
+            "GET",
+            "DELETE",
+            "HEAD"
+        ],
+        "AllowedHeaders": [
+            "*"
+        ],
+        "ExposeHeaders": [
+            "ETag"
+        ],
+        "MaxAgeSeconds": 3000
+    }
+]
