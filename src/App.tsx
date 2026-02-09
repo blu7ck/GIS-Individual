@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import CesiumViewer from './CesiumViewer';
 import { Auth } from './components/forms/Auth';
 import { ShareModal } from './components/ui/ShareModal';
@@ -276,15 +276,13 @@ const App: React.FC = () => {
   }, [setAssets]);
 
   // Open viewer handler (for GLB/Potree)
-  const handleOpenViewer = useMemo(() => {
-    return (asset: AssetLayer) => {
-      if (asset.type === LayerType.GLB_UNCOORD) {
-        // TODO: Open model viewer
-        console.log('Open GLB viewer for:', asset.name);
-      } else if (asset.type === LayerType.POTREE || asset.type === LayerType.TILES_3D) {
-        setActivePotreeLayer(asset);
-      }
-    };
+  const handleOpenViewer = useCallback((asset: AssetLayer) => {
+    if (asset.type === LayerType.GLB_UNCOORD) {
+      // TODO: Open model viewer
+      console.log('Open GLB viewer for:', asset.name);
+    } else if (asset.type === LayerType.POTREE || asset.type === LayerType.TILES_3D) {
+      setActivePotreeLayer(asset);
+    }
   }, [setActivePotreeLayer]);
 
 
@@ -373,11 +371,7 @@ const App: React.FC = () => {
           onDeleteLayer={handleDeleteLayer}
           onShareLayer={layer => setSharingAsset(layer)}
           onToggleAllLayers={handleToggleAllLayersInProject}
-          onOpenModelViewer={(asset) => {
-            if (asset.potree_url || asset.type === LayerType.POTREE || asset.type === LayerType.LAS) {
-              setActivePotreeLayer(asset);
-            }
-          }}
+          onOpenModelViewer={handleOpenViewer}
           onUpdateAsset={handleUpdateAsset}
 
           // View State
