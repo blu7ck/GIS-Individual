@@ -14,6 +14,7 @@ import shutil
 from pathlib import Path
 from typing import Optional
 import json
+from urllib.parse import urlparse
 
 # Third-party imports
 import boto3
@@ -55,9 +56,9 @@ class PointCloudConverter:
         """Download LAS/LAZ file from R2."""
         self.log(f"Downloading from {self.input_url}")
         
-        # Extract key from URL
-        # URL format: https://bucket.r2.cloudflarestorage.com/path/to/file.laz
-        key = self.input_url.split(self.bucket_name + '/')[-1]
+        # Extract key from URL (handle custom domains or R2 dev URLs)
+        parsed_url = urlparse(self.input_url)
+        key = parsed_url.path.lstrip('/')
         
         # Determine extension
         ext = '.laz' if '.laz' in key.lower() else '.las'

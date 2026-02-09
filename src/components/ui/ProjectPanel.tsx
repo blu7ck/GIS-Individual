@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Folder, FileBox, Plus, Upload, ChevronRight, ChevronDown, Eye, EyeOff, Share2, Map, Trash2, Box, Edit2, Check, X as XIcon, SlidersHorizontal, RefreshCw, Save, AlertTriangle, Download, ExternalLink, Info, Target } from 'lucide-react';
-import { Project, AssetLayer, LayerType, StorageConfig } from '../../types';
+import { Folder, FileBox, Plus, Upload, ChevronRight, ChevronDown, Eye, EyeOff, Share2, Map, Trash2, Box, Edit2, Check, X as XIcon, SlidersHorizontal, RefreshCw, Save, AlertTriangle, Download, ExternalLink, Loader2 } from 'lucide-react';
+import { Project, AssetLayer, LayerType, StorageConfig, AssetStatus } from '../../types';
 import { Button } from '../common/Button';
 import { StorageBar } from './StorageBar';
 
@@ -247,6 +247,15 @@ export const ProjectPanel: React.FC<Props> = ({
 
     // Helper to render name with height
     const getDisplayName = (asset: AssetLayer) => {
+        if (asset.status === AssetStatus.PROCESSING) {
+            return (
+                <span className="flex items-center gap-1.5 italic text-gray-400">
+                    <Loader2 size={10} className="animate-spin text-engineering-primary" />
+                    Processing: {asset.name}
+                </span>
+            );
+        }
+
         const height = localHeights[asset.id] ?? asset.heightOffset ?? 0;
         if (height !== 0) {
             return (
@@ -288,6 +297,13 @@ export const ProjectPanel: React.FC<Props> = ({
                                 onClick={() => handleFocus(asset.id)}
                             >
                                 {getDisplayName(asset)}
+                                {asset.status === AssetStatus.ERROR && (
+                                    <AlertTriangle
+                                        size={10}
+                                        className="text-red-500 ml-1.5 flex-shrink-0"
+                                        title={asset.error_message || 'Processing failed'}
+                                    />
+                                )}
                             </span>
                         )}
                     </div>
@@ -304,7 +320,12 @@ export const ProjectPanel: React.FC<Props> = ({
                             </>
                         ) : (
                             <>
-                                <button onClick={() => onToggleLayer(asset.id)} className="text-carta-mist-500 hover:text-white" title="Toggle Visibility">
+                                <button
+                                    onClick={() => onToggleLayer(asset.id)}
+                                    className={`text-carta-mist-500 hover:text-white ${asset.status === AssetStatus.PROCESSING ? 'opacity-30 cursor-not-allowed' : ''}`}
+                                    title={asset.status === AssetStatus.PROCESSING ? 'Processing...' : 'Toggle Visibility'}
+                                    disabled={asset.status === AssetStatus.PROCESSING}
+                                >
                                     {asset.visible ? <Eye size={12} /> : <EyeOff size={12} />}
                                 </button>
                                 {asset.type === LayerType.TILES_3D && (
@@ -333,7 +354,11 @@ export const ProjectPanel: React.FC<Props> = ({
                                 <button onClick={() => handleEditStart(asset)} className="text-carta-mist-500 hover:text-white" title="Rename">
                                     <Edit2 size={12} />
                                 </button>
-                                <button onClick={() => requestDeleteLayer(asset.id, asset.name)} className="text-carta-mist-500 hover:text-carta-accent-red" title="Delete">
+                                <button
+                                    onClick={() => requestDeleteLayer(asset.id, asset.name)}
+                                    className="text-carta-mist-500 hover:text-carta-accent-red"
+                                    title="Delete"
+                                >
                                     <Trash2 size={12} />
                                 </button>
                             </>
@@ -342,72 +367,76 @@ export const ProjectPanel: React.FC<Props> = ({
                 </div>
 
                 {/* Inline Height Control (Only for 3D Tiles) */}
-                {expandedHeightControlId === asset.id && asset.type === LayerType.TILES_3D && (
-                    <div className="mt-2 p-2 bg-engineering-panel/50 border border-engineering-border/50 rounded-lg animate-in slide-in-from-top-1">
-                        <div className="flex items-center justify-between mb-2">
-                            <span className="text-[10px] font-medium text-engineering-primary uppercase tracking-wider">Adjustment (m)</span>
-                            <div className="flex items-center gap-1">
-                                <button
-                                    onClick={() => handleHeightReset(asset)}
-                                    className="p-1 text-gray-500 hover:text-white transition-colors"
-                                    title="Reset"
-                                >
-                                    <RefreshCw size={10} />
-                                </button>
-                                <button
-                                    onClick={() => handleHeightSave(asset)}
-                                    className="p-1 text-engineering-primary hover:text-engineering-primary/80 transition-colors"
-                                    title="Save"
-                                >
-                                    <Save size={12} />
-                                </button>
+                {
+                    expandedHeightControlId === asset.id && asset.type === LayerType.TILES_3D && (
+                        <div className="mt-2 p-2 bg-engineering-panel/50 border border-engineering-border/50 rounded-lg animate-in slide-in-from-top-1">
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="text-[10px] font-medium text-engineering-primary uppercase tracking-wider">Adjustment (m)</span>
+                                <div className="flex items-center gap-1">
+                                    <button
+                                        onClick={() => handleHeightReset(asset)}
+                                        className="p-1 text-gray-500 hover:text-white transition-colors"
+                                        title="Reset"
+                                    >
+                                        <RefreshCw size={10} />
+                                    </button>
+                                    <button
+                                        onClick={() => handleHeightSave(asset)}
+                                        className="p-1 text-engineering-primary hover:text-engineering-primary/80 transition-colors"
+                                        title="Save"
+                                    >
+                                        <Save size={12} />
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="range"
+                                    min="-500"
+                                    max="500"
+                                    step="1"
+                                    value={localHeights[asset.id] ?? asset.heightOffset ?? 0}
+                                    onChange={(e) => handleHeightChange(asset, parseFloat(e.target.value))}
+                                    className="flex-1 h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-engineering-primary"
+                                />
+                                <input
+                                    type="number"
+                                    value={localHeights[asset.id] ?? asset.heightOffset ?? 0}
+                                    onChange={(e) => handleHeightChange(asset, parseFloat(e.target.value))}
+                                    className="w-12 bg-black/20 border border-engineering-border rounded px-1 py-0.5 text-[10px] text-white text-right focus:border-engineering-primary outline-none"
+                                />
                             </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                            <input
-                                type="range"
-                                min="-500"
-                                max="500"
-                                step="1"
-                                value={localHeights[asset.id] ?? asset.heightOffset ?? 0}
-                                onChange={(e) => handleHeightChange(asset, parseFloat(e.target.value))}
-                                className="flex-1 h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-engineering-primary"
-                            />
-                            <input
-                                type="number"
-                                value={localHeights[asset.id] ?? asset.heightOffset ?? 0}
-                                onChange={(e) => handleHeightChange(asset, parseFloat(e.target.value))}
-                                className="w-12 bg-black/20 border border-engineering-border rounded px-1 py-0.5 text-[10px] text-white text-right focus:border-engineering-primary outline-none"
-                            />
-                        </div>
-                    </div>
-                )}
+                    )
+                }
 
                 {/* Inline Info Panel */}
-                {expandedInfoId === asset.id && (
-                    <div className="mt-1 mb-2 mx-1 p-3 bg-engineering-panel/50 border border-engineering-border/50 rounded-lg animate-in slide-in-from-top-1 text-[10px]">
-                        <div className="space-y-2">
-                            <div className="flex justify-between border-b border-engineering-border/30 pb-1">
-                                <span className="text-gray-500 uppercase">Type</span>
-                                <span className="text-engineering-primary font-mono">{asset.type}</span>
-                            </div>
-                            <div className="flex flex-col gap-1">
-                                <span className="text-gray-500 uppercase">Storage Path</span>
-                                <span className="text-[9px] text-gray-400 break-all bg-black/20 p-1 rounded font-mono">{asset.storage_path}</span>
-                            </div>
-                            <div className="pt-1">
-                                <button
-                                    onClick={() => asset.url && window.open(asset.url, '_blank')}
-                                    className="w-full flex items-center justify-center gap-1 p-1 bg-engineering-primary/10 hover:bg-engineering-primary/20 text-engineering-primary rounded border border-engineering-primary/20 transition-all"
-                                >
-                                    <ExternalLink size={10} />
-                                    <span>Open URL</span>
-                                </button>
+                {
+                    expandedInfoId === asset.id && (
+                        <div className="mt-1 mb-2 mx-1 p-3 bg-engineering-panel/50 border border-engineering-border/50 rounded-lg animate-in slide-in-from-top-1 text-[10px]">
+                            <div className="space-y-2">
+                                <div className="flex justify-between border-b border-engineering-border/30 pb-1">
+                                    <span className="text-gray-500 uppercase">Type</span>
+                                    <span className="text-engineering-primary font-mono">{asset.type}</span>
+                                </div>
+                                <div className="flex flex-col gap-1">
+                                    <span className="text-gray-500 uppercase">Storage Path</span>
+                                    <span className="text-[9px] text-gray-400 break-all bg-black/20 p-1 rounded font-mono">{asset.storage_path}</span>
+                                </div>
+                                <div className="pt-1">
+                                    <button
+                                        onClick={() => asset.url && window.open(asset.url, '_blank')}
+                                        className="w-full flex items-center justify-center gap-1 p-1 bg-engineering-primary/10 hover:bg-engineering-primary/20 text-engineering-primary rounded border border-engineering-primary/20 transition-all"
+                                    >
+                                        <ExternalLink size={10} />
+                                        <span>Open URL</span>
+                                    </button>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                )}
-            </div>
+                    )
+                }
+            </div >
         );
     };
 
@@ -665,11 +694,11 @@ export const ProjectPanel: React.FC<Props> = ({
                                                                 </div>
                                                             )}
 
-                                                            {/* Point Clouds (Potree) */}
-                                                            {projectAssets.filter(a => a.type === LayerType.POTREE).length > 0 && (
+                                                            {/* Point Clouds (Potree & LAS) */}
+                                                            {projectAssets.filter(a => a.type === LayerType.POTREE || a.type === LayerType.LAS).length > 0 && (
                                                                 <div className="mb-1">
                                                                     <div className="text-[10px] text-gray-500 font-medium mb-1 px-1">Point Clouds</div>
-                                                                    {projectAssets.filter(a => a.type === LayerType.POTREE).map(asset =>
+                                                                    {projectAssets.filter(a => a.type === LayerType.POTREE || a.type === LayerType.LAS).map(asset =>
                                                                         renderAssetItem(asset, <Box size={14} />, 'text-[#0EA5E9]')
                                                                     )}
                                                                 </div>

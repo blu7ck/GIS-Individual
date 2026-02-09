@@ -102,10 +102,11 @@ export async function uploadFileAsset(
             }
         }
         // Potree/Point Cloud - Mark as processing if raw LAS/LAZ
-        else if (type === LayerType.POTREE) {
+        else if (type === LayerType.POTREE || type === LayerType.LAS) {
             if (config) {
                 finalUrl = await uploadToR2(file, config, (progress) => {
-                    onProgress?.({ percent: progress, message: `Uploading LAS/LAZ: ${Math.round(progress)}%` });
+                    const label = type === LayerType.LAS ? 'LAS/LAZ' : 'Point Cloud';
+                    onProgress?.({ percent: progress, message: `Uploading ${label}: ${Math.round(progress)}%` });
                 }, signal);
             } else {
                 finalUrl = URL.createObjectURL(file);
@@ -124,6 +125,8 @@ export async function uploadFileAsset(
 
         if (signal?.aborted) throw new Error('Upload cancelled');
 
+        const isPointCloud = type === LayerType.POTREE || type === LayerType.LAS;
+
         const newAsset: AssetLayer = {
             id: uuidv4(),
             project_id: projectId,
@@ -134,7 +137,7 @@ export async function uploadFileAsset(
             visible: false,
             opacity: 1,
             data: geoJSONData || undefined,
-            status: type === LayerType.POTREE ? AssetStatus.PROCESSING : AssetStatus.READY
+            status: isPointCloud ? AssetStatus.PROCESSING : AssetStatus.READY
         };
 
         // Save to Supabase
@@ -159,24 +162,18 @@ export async function uploadFileAsset(
             }
 
             // Trigger point cloud processing for LAS/LAZ files
-            if (type === LayerType.POTREE && config.workerUrl) {
-                // ... (processing logic calls)
-                // We'll keep this async but no await, so cancellation after DB save doesn't matter much
-                // or we can invoke it and catch errors.
-                try {
-                    const processResponse = await fetch(`${config.workerUrl}/process-pointcloud`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            assetId: newAsset.id,
-                            rawFileUrl: finalUrl,
-                            projectId: projectId
-                        })
-                    });
-                    // ... logs
-                } catch (procError) {
-                    logger.warn('Error triggering point cloud processing:', procError);
-                }
+            const isPointCloudType = type === LayerType.POTREE || type === LayerType.LAS;
+            if (isPointCloudType && config.workerUrl) {
+                // Trigger cloud processing
+                fetch(`${config.workerUrl}/process-pointcloud`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        assetId: newAsset.id,
+                        rawFileUrl: finalUrl,
+                        projectId: projectId
+                    })
+                }).catch(err => logger.error('Error triggering point cloud processing:', err));
             }
         }
 
