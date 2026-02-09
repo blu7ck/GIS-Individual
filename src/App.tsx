@@ -28,6 +28,7 @@ if (typeof window !== 'undefined') {
 }
 
 import { saveMeasurementAsAnnotation } from './services/measurementService';
+import { checkSupabaseConnection } from './lib/supabase';
 
 const App: React.FC = () => {
   // 1. UI & Routing State
@@ -64,14 +65,12 @@ const App: React.FC = () => {
 
       // Verify connection once on mount
       if (envConfig.supabaseUrl && envConfig.supabaseKey) {
-        import('./lib/supabase').then(({ checkSupabaseConnection }) => {
-          checkSupabaseConnection(envConfig.supabaseUrl, envConfig.supabaseKey).then(connected => {
-            if (connected) {
-              console.log('✅ Supabase Connected');
-            } else {
-              notify('Failed to connect to Supabase. Check credentials.', 'error');
-            }
-          });
+        checkSupabaseConnection(envConfig.supabaseUrl, envConfig.supabaseKey).then(connected => {
+          if (connected) {
+            console.log('✅ Supabase Connected');
+          } else {
+            notify('Failed to connect to Supabase. Check credentials.', 'error');
+          }
         });
       }
     }

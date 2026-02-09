@@ -64,6 +64,7 @@ class PointCloudConverter:
         ext = '.laz' if '.laz' in key.lower() else '.las'
         local_path = self.work_dir / f"input{ext}"
         
+        self.log(f"Downloading key: '{key}' from bucket: '{self.bucket_name}'")
         self.s3.download_file(self.bucket_name, key, str(local_path))
         
         file_size = local_path.stat().st_size / (1024 * 1024)

@@ -298,11 +298,9 @@ export const ProjectPanel: React.FC<Props> = ({
                             >
                                 {getDisplayName(asset)}
                                 {asset.status === AssetStatus.ERROR && (
-                                    <AlertTriangle
-                                        size={10}
-                                        className="text-red-500 ml-1.5 flex-shrink-0"
-                                        title={asset.error_message || 'Processing failed'}
-                                    />
+                                    <span title={asset.error_message || 'Processing failed'} className="ml-1.5 flex-shrink-0">
+                                        <AlertTriangle size={10} className="text-red-500" />
+                                    </span>
                                 )}
                             </span>
                         )}
