@@ -180,7 +180,7 @@ export default {
           const bucketName = env.BUCKET_NAME;
           const objectKey = key;
 
-          let r2Url = `https://${accountId}.eu.r2.cloudflarestorage.com/${bucketName}/${objectKey}`;
+          let r2Url = `https://${accountId}.r2.cloudflarestorage.com/${bucketName}/${objectKey}`;
 
           // If partNumber and uploadId are present, it's a Part Upload
           if (partNumber && uploadId) {
@@ -242,7 +242,7 @@ export default {
           secretAccessKey: env.R2_SECRET_ACCESS_KEY,
         });
 
-        const r2Url = `https://${env.ACCOUNT_ID}.eu.r2.cloudflarestorage.com/${env.BUCKET_NAME}/${key}?uploads`;
+        const r2Url = `https://${env.ACCOUNT_ID}.r2.cloudflarestorage.com/${env.BUCKET_NAME}/${key}?uploads`;
         const startRequest = new Request(r2Url, {
           method: 'POST',
           headers: { 'Content-Type': type || 'application/octet-stream' }
@@ -278,7 +278,7 @@ export default {
         }
         xml += '</CompleteMultipartUpload>';
 
-        const r2Url = `https://${env.ACCOUNT_ID}.eu.r2.cloudflarestorage.com/${env.BUCKET_NAME}/${key}?uploadId=${uploadId}`;
+        const r2Url = `https://${env.ACCOUNT_ID}.r2.cloudflarestorage.com/${env.BUCKET_NAME}/${key}?uploadId=${uploadId}`;
         const completeRequest = new Request(r2Url, {
           method: 'POST',
           body: xml,
