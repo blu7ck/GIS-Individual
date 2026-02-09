@@ -86,7 +86,7 @@ const App: React.FC = () => {
     handleCreateProject,
     handleDeleteProject,
     handleUpdateAssetMetadata
-  } = useProjectData(user, storageConfig, notify);
+  } = useProjectData(user, storageConfig, notify, storageRefreshKey);
 
   // 5. Feature Hooks
   const {
@@ -285,7 +285,7 @@ const App: React.FC = () => {
         setActivePotreeLayer(asset);
       }
     };
-  }, []);
+  }, [setActivePotreeLayer]);
 
 
   // Tiles height save handler

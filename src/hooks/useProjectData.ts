@@ -9,7 +9,7 @@ interface User {
     email: string;
 }
 
-export function useProjectData(user: User | null, storageConfig: StorageConfig | null, notify: (msg: string, type: any) => void) {
+export function useProjectData(user: User | null, storageConfig: StorageConfig | null, notify: (msg: string, type: any) => void, refreshKey: number = 0) {
     const [projects, setProjects] = useState<Project[]>([]);
     const [assets, setAssets] = useState<AssetLayer[]>([]);
     const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
@@ -41,7 +41,7 @@ export function useProjectData(user: User | null, storageConfig: StorageConfig |
         };
 
         loadData();
-    }, [storageConfig, user]);
+    }, [storageConfig, user, refreshKey]);
 
     const handleCreateProject = async (name: string) => {
         if (!user) return;
