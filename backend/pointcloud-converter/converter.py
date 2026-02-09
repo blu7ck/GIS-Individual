@@ -1,252 +1,322 @@
 #!/usr/bin/env python3
-"""
-Point Cloud Converter for Hekamap
-Converts LAS/LAZ files to both Potree and 3D Tiles formats.
+"""Point Cloud Converter for Hekamap (Potree Octree only)
+
+- Downloads LAS/LAZ from Cloudflare R2 (S3-compatible)
+- Converts to Potree octree using PotreeConverter
+- Uploads Potree output folder back to R2
+- Updates Supabase assets table
+
 Designed to run as a Cloud Run Job.
 """
 
 import argparse
 import subprocess
 import os
-import sys
 import tempfile
 import shutil
 from pathlib import Path
-from typing import Optional
 import json
 from urllib.parse import urlparse
 
-# Third-party imports
 import boto3
 from botocore.config import Config
 from supabase import create_client, Client
 
 
+def _require_env(name: str) -> str:
+    v = os.environ.get(name, "").strip()
+    if not v:
+        raise ValueError(f"{name} must be set")
+    return v
+
+
 class PointCloudConverter:
-    """Handles LAS/LAZ to Potree + 3D Tiles conversion."""
-    
-    def __init__(self, asset_id: str, input_url: str, output_bucket: str):
+    def __init__(self, asset_id: str, input_url: str, output_bucket: str, input_key: str | None = None):
         self.asset_id = asset_id
         self.input_url = input_url
-        self.output_bucket = output_bucket
+        self.output_bucket = (output_bucket or "").rstrip("/")
+        self.input_key = input_key
         self.work_dir = Path(tempfile.mkdtemp(prefix=f"pc_{asset_id}_"))
-        
-        # R2 Client (S3-compatible)
-        if not os.environ.get('R2_ACCESS_KEY') or not os.environ.get('R2_SECRET_KEY'):
-             self.log("R2 credentials missing!", "ERROR")
-             raise ValueError("R2_ACCESS_KEY and R2_SECRET_KEY must be set.")
 
+        # --- Validate env early (fail fast with readable errors) ---
+        r2_access = _require_env("R2_ACCESS_KEY")
+        r2_secret = _require_env("R2_SECRET_KEY")
+        r2_endpoint = _require_env("R2_ENDPOINT")
+        self.bucket_name = os.environ.get("R2_BUCKET_NAME", "hekamap-assets").strip() or "hekamap-assets"
+
+        sb_url = _require_env("SUPABASE_URL")
+        sb_key = _require_env("SUPABASE_KEY")
+
+        # R2 Client (S3-compatible)
         self.s3 = boto3.client(
-            's3',
-            endpoint_url=os.environ.get('R2_ENDPOINT', '').strip(),
-            aws_access_key_id=os.environ.get('R2_ACCESS_KEY', '').strip(),
-            aws_secret_access_key=os.environ.get('R2_SECRET_KEY', '').strip(),
-            config=Config(signature_version='s3v4'),
-            region_name='auto'
+            "s3",
+            endpoint_url=r2_endpoint,
+            aws_access_key_id=r2_access,
+            aws_secret_access_key=r2_secret,
+            config=Config(signature_version="s3v4"),
+            region_name="auto",
         )
-        self.bucket_name = os.environ.get('R2_BUCKET_NAME', 'hekamap-assets').strip()
-        endpoint = os.environ.get('R2_ENDPOINT', '').strip()
-        self.log(f"R2 Configuration: Bucket={self.bucket_name}, Endpoint={'Global' if '.eu.' not in endpoint else 'EU-Jurisdiction'}")
-        
+
+        endpoint = r2_endpoint
+        self.log(
+            f"R2 Configuration: Bucket={self.bucket_name}, Endpoint={'Global' if '.eu.' not in endpoint else 'EU-Jurisdiction'}"
+        )
+
         # Supabase Client
-        self.supabase: Client = create_client(
-            os.environ['SUPABASE_URL'].strip(),
-            os.environ['SUPABASE_KEY'].strip()
-        )
-        
-    def log(self, message: str, level: str = "INFO"):
-        """Simple logging to stdout (captured by Cloud Run)."""
+        self.supabase: Client = create_client(sb_url, sb_key)
+
+    def log(self, message: str, level: str = "INFO") -> None:
         print(f"[{level}] [{self.asset_id}] {message}", flush=True)
-        
+
+    def _derive_key(self) -> str:
+        """Derive an object key from input_key or input_url.
+
+        Best practice is to pass --input-key. URL parsing is a fallback.
+        """
+        if self.input_key:
+            key = self.input_key.lstrip("/")
+            if not key:
+                raise ValueError("input_key is empty")
+            return key
+
+        if not self.input_url:
+            raise ValueError("input_url is empty (provide --input-key or --input-url)")
+
+        parsed = urlparse(self.input_url)
+        key = (parsed.path or "").lstrip("/")
+
+        # If URL includes bucket name in the path (common for some public URL patterns), strip it.
+        # Example: /hekamap-assets/uploads/a.laz  -> uploads/a.laz
+        if key.startswith(self.bucket_name + "/"):
+            key = key[len(self.bucket_name) + 1 :]
+
+        if not key:
+            raise ValueError("Failed to derive object key from input_url; pass --input-key instead.")
+
+        return key
+
     def download_input(self) -> Path:
-        """Download LAS/LAZ file from R2."""
-        self.log(f"Downloading from {self.input_url}")
-        
-        # Extract key from URL (handle custom domains or R2 dev URLs)
-        parsed_url = urlparse(self.input_url)
-        key = parsed_url.path.lstrip('/')
-        
+        self.log(f"Downloading from {self.input_url or '(input_key mode)'}")
+
+        key = self._derive_key()
+
         # Determine extension
-        ext = '.laz' if '.laz' in key.lower() else '.las'
+        lower = key.lower()
+        if lower.endswith(".laz"):
+            ext = ".laz"
+        elif lower.endswith(".las"):
+            ext = ".las"
+        else:
+            # Fallback: guess from URL, else default to .laz
+            ext = ".laz" if ".laz" in lower else ".las"
+
         local_path = self.work_dir / f"input{ext}"
-        
+
         self.log(f"Downloading key: '{key}' from bucket: '{self.bucket_name}'")
         self.s3.download_file(self.bucket_name, key, str(local_path))
-        
+
         file_size = local_path.stat().st_size / (1024 * 1024)
         self.log(f"Downloaded {file_size:.2f} MB")
-        
+
         return local_path
-        
+
     def convert_to_potree(self, input_file: Path) -> Path:
-        """Convert to Potree octree format using PotreeConverter."""
         self.log("Starting Potree conversion...")
-        
-        output_dir = self.work_dir / 'potree'
+
+        if not input_file.exists():
+            raise RuntimeError(f"Input file not found: {input_file}")
+
+        output_dir = self.work_dir / "potree"
         output_dir.mkdir(parents=True, exist_ok=True)
-        
+
+        # NOTE: No viewer generation here (keeps output smaller and faster to upload).
         cmd = [
-            '/opt/potree/PotreeConverter',
+            "/opt/potree/PotreeConverter",
             str(input_file),
-            '-o', str(output_dir),
-            '--generate-page', 'viewer'
+            "-o",
+            str(output_dir),
         ]
-        
+
         result = subprocess.run(cmd, capture_output=True, text=True)
-        
+
+        # Always log stdout for troubleshooting (PotreeConverter is chatty and useful).
+        if result.stdout.strip():
+            self.log(result.stdout.strip())
+
         if result.returncode != 0:
-            self.log(f"PotreeConverter error: {result.stderr}", "ERROR")
-            raise RuntimeError(f"PotreeConverter failed: {result.stderr}")
-            
+            err = (result.stderr or "").strip()
+            if err:
+                self.log(f"PotreeConverter stderr: {err}", "ERROR")
+            raise RuntimeError(f"PotreeConverter failed (code {result.returncode})")
+
         self.log("Potree conversion complete")
         return output_dir
-        
-    def convert_to_3dtiles(self, input_file: Path) -> Path:
-        """Convert to 3D Tiles format using py3dtiles."""
-        self.log("Starting 3D Tiles conversion...")
-        
-        output_dir = self.work_dir / '3dtiles'
-        output_dir.mkdir(parents=True, exist_ok=True)
-        
-        cmd = [
-            'py3dtiles', 'convert',
-            str(input_file),
-            '--out', str(output_dir),
-            '--srs', 'EPSG:4326'  # Default to WGS84, can be parameterized
-        ]
-        
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        
-        if result.returncode != 0:
-            self.log(f"py3dtiles error: {result.stderr}", "ERROR")
-            raise RuntimeError(f"py3dtiles failed: {result.stderr}")
-            
-        self.log("3D Tiles conversion complete")
-        return output_dir
-        
+
+    def _content_args_for(self, file_path: Path) -> dict:
+        """Return ExtraArgs for S3 upload based on file extension."""
+        suffix = file_path.suffix.lower()
+
+        # Basic content types for Potree viewer assets / metadata.
+        content_type_map = {
+            ".json": "application/json",
+            ".html": "text/html",
+            ".js": "application/javascript",
+            ".css": "text/css",
+            ".wasm": "application/wasm",
+            ".bin": "application/octet-stream",
+            ".txt": "text/plain",
+            ".svg": "image/svg+xml",
+            ".png": "image/png",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".gif": "image/gif",
+            ".map": "application/json",
+            ".xml": "application/xml",
+        }
+
+        extra: dict = {"ContentType": content_type_map.get(suffix, "application/octet-stream")}
+
+        # If you're actually uploading pre-gzipped assets with .gz extension, set encoding.
+        if suffix == ".gz":
+            extra["ContentEncoding"] = "gzip"
+            # Try to guess original type from the second suffix (e.g., .js.gz)
+            parts = file_path.name.lower().split(".")
+            if len(parts) >= 3:
+                orig_suffix = "." + parts[-2]
+                extra["ContentType"] = content_type_map.get(orig_suffix, "application/octet-stream")
+
+        return extra
+
     def upload_folder(self, local_folder: Path, r2_prefix: str) -> str:
-        """Upload folder contents to R2 recursively."""
         self.log(f"Uploading {local_folder.name} to {r2_prefix}")
-        
+
         file_count = 0
-        for file_path in local_folder.rglob('*'):
-            if file_path.is_file():
-                relative_path = file_path.relative_to(local_folder)
-                s3_key = f"{r2_prefix}/{relative_path}"
-                
-                # Determine content type
-                content_type = 'application/octet-stream'
-                if file_path.suffix == '.json':
-                    content_type = 'application/json'
-                elif file_path.suffix == '.html':
-                    content_type = 'text/html'
-                elif file_path.suffix == '.js':
-                    content_type = 'application/javascript'
-                    
-                self.s3.upload_file(
-                    str(file_path),
-                    self.bucket_name,
-                    s3_key,
-                    ExtraArgs={'ContentType': content_type}
-                )
-                file_count += 1
-                
+        for file_path in local_folder.rglob("*"):
+            if not file_path.is_file():
+                continue
+
+            relative_path = file_path.relative_to(local_folder).as_posix()
+            s3_key = f"{r2_prefix.rstrip('/')}/{relative_path}"
+
+            extra_args = self._content_args_for(file_path)
+
+            self.s3.upload_file(
+                str(file_path),
+                self.bucket_name,
+                s3_key,
+                ExtraArgs=extra_args,
+            )
+            file_count += 1
+
         self.log(f"Uploaded {file_count} files")
-        
-        # Return public URL to the folder
-        return f"{self.output_bucket}/{r2_prefix}"
-        
-    def update_database(self, potree_url: str, tiles_url: str, metadata: dict):
-        """Update asset record in Supabase."""
+
+        return f"{self.output_bucket}/{r2_prefix.rstrip('/')}" if self.output_bucket else r2_prefix.rstrip("/")
+
+    def _extract_potree_metadata(self, potree_output: Path) -> dict:
+        """Best-effort extraction of point count / bounding box from Potree output."""
+        meta: dict = {}
+
+        # Some builds output metadata.json; others embed metadata in cloud.js.
+        metadata_json = potree_output / "metadata.json"
+        if metadata_json.exists():
+            try:
+                with open(metadata_json, "r", encoding="utf-8") as f:
+                    m = json.load(f)
+                meta["pointCount"] = m.get("points", m.get("pointCount", 0))
+                meta["boundingBox"] = m.get("boundingBox", {})
+                return meta
+            except Exception:
+                meta["metadata_read_error"] = True
+
+        cloud_js = potree_output / "cloud.js"
+        if cloud_js.exists():
+            try:
+                txt = cloud_js.read_text(encoding="utf-8", errors="ignore")
+                # Potree cloud.js usually contains a JS object literal; try to extract JSON-ish part.
+                start = txt.find("{")
+                end = txt.rfind("}")
+                if start != -1 and end != -1 and end > start:
+                    blob = txt[start : end + 1]
+                    # Some files are valid JSON; if not, this may fail (that's ok).
+                    m = json.loads(blob)
+                    meta["pointCount"] = m.get("points", m.get("pointCount", 0))
+                    meta["boundingBox"] = m.get("boundingBox", {})
+                    return meta
+            except Exception:
+                meta["cloudjs_parse_failed"] = True
+
+        meta.setdefault("pointCount", 0)
+        return meta
+
+    def update_database(self, potree_url: str, metadata: dict) -> None:
         self.log("Updating database...")
-        
-        self.supabase.table('assets').update({
-            'status': 'READY',
-            'potree_url': potree_url,
-            'tiles_url': tiles_url,
-            'metadata': metadata,
-            'error_message': None
-        }).eq('id', self.asset_id).execute()
-        
+
+        self.supabase.table("assets").update(
+            {
+                "status": "READY",
+                "potree_url": potree_url,
+                # If your schema still has tiles_url, leave it untouched or set to None explicitly:
+                "tiles_url": None,
+                "metadata": metadata,
+                "error_message": None,
+            }
+        ).eq("id", self.asset_id).execute()
+
         self.log("Database updated successfully")
-        
-    def set_error(self, error_message: str):
-        """Mark asset as failed in database."""
+
+    def set_error(self, error_message: str) -> None:
         self.log(f"Setting error status: {error_message}", "ERROR")
-        
+
         try:
-            self.supabase.table('assets').update({
-                'status': 'ERROR',
-                'error_message': error_message[:500]  # Truncate long messages
-            }).eq('id', self.asset_id).execute()
+            self.supabase.table("assets").update(
+                {
+                    "status": "ERROR",
+                    "error_message": (error_message or "")[:500],
+                }
+            ).eq("id", self.asset_id).execute()
         except Exception as e:
             self.log(f"Failed to update error status: {e}", "ERROR")
-            
-    def cleanup(self):
-        """Remove temporary files."""
+
+    def cleanup(self) -> None:
         self.log("Cleaning up temporary files...")
         shutil.rmtree(self.work_dir, ignore_errors=True)
-        
-    def run(self):
-        """Execute the full conversion pipeline."""
+
+    def run(self) -> None:
         try:
-            # 1. Download input
             input_file = self.download_input()
-            
-            # 2. Convert to Potree
             potree_output = self.convert_to_potree(input_file)
-            
-            # 3. Convert to 3D Tiles
-            tiles_output = self.convert_to_3dtiles(input_file)
-            
-            # 4. Upload outputs
-            potree_url = self.upload_folder(
-                potree_output, 
-                f"processed/potree/{self.asset_id}"
-            )
-            tiles_url = self.upload_folder(
-                tiles_output, 
-                f"processed/3dtiles/{self.asset_id}"
-            )
-            
-            # 5. Extract metadata (point count from Potree output if available)
-            metadata = {}
-            metadata_file = potree_output / 'metadata.json'
-            if metadata_file.exists():
-                with open(metadata_file) as f:
-                    potree_meta = json.load(f)
-                    metadata['pointCount'] = potree_meta.get('points', 0)
-                    metadata['boundingBox'] = potree_meta.get('boundingBox', {})
-                    
-            # 6. Update database
-            self.update_database(potree_url, tiles_url, metadata)
-            
+
+            potree_url = self.upload_folder(potree_output, f"processed/potree/{self.asset_id}")
+
+            metadata = self._extract_potree_metadata(potree_output)
+
+            self.update_database(potree_url, metadata)
             self.log("✅ Conversion complete!")
-            
+
         except Exception as e:
             self.set_error(str(e))
             raise
-            
         finally:
             self.cleanup()
 
 
-def main():
-    parser = argparse.ArgumentParser(description='Point Cloud Converter')
-    parser.add_argument('--asset-id', required=True, help='Asset UUID')
-    parser.add_argument('--input-url', required=True, help='R2 URL of input LAS/LAZ file')
-    parser.add_argument('--output-bucket', required=True, help='Public R2 bucket URL')
-    
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Point Cloud Converter (Potree only)")
+    parser.add_argument("--asset-id", required=True, help="Asset UUID")
+    parser.add_argument("--input-url", required=False, default="", help="R2 public URL of input LAS/LAZ file (optional if --input-key provided)")
+    parser.add_argument("--input-key", required=False, default="", help="R2 object key (recommended; avoids fragile URL parsing)")
+    parser.add_argument("--output-bucket", required=True, help="Public base URL where processed files are served (no trailing slash)")
+
     args = parser.parse_args()
-    
+
     converter = PointCloudConverter(
         asset_id=args.asset_id,
         input_url=args.input_url,
-        output_bucket=args.output_bucket
+        input_key=(args.input_key.strip() or None),
+        output_bucket=args.output_bucket,
     )
-    
     converter.run()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
