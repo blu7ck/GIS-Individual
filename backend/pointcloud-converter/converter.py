@@ -32,20 +32,24 @@ class PointCloudConverter:
         self.work_dir = Path(tempfile.mkdtemp(prefix=f"pc_{asset_id}_"))
         
         # R2 Client (S3-compatible)
+        if not os.environ.get('R2_ACCESS_KEY') or not os.environ.get('R2_SECRET_KEY'):
+             self.log("R2 credentials missing!", "ERROR")
+             raise ValueError("R2_ACCESS_KEY and R2_SECRET_KEY must be set.")
+
         self.s3 = boto3.client(
             's3',
-            endpoint_url=os.environ.get('R2_ENDPOINT'),
-            aws_access_key_id=os.environ.get('R2_ACCESS_KEY'),
-            aws_secret_access_key=os.environ.get('R2_SECRET_KEY'),
+            endpoint_url=os.environ.get('R2_ENDPOINT', '').strip(),
+            aws_access_key_id=os.environ.get('R2_ACCESS_KEY', '').strip(),
+            aws_secret_access_key=os.environ.get('R2_SECRET_KEY', '').strip(),
             config=Config(signature_version='s3v4'),
             region_name='auto'
         )
-        self.bucket_name = os.environ.get('R2_BUCKET_NAME', 'hekamap-assets')
+        self.bucket_name = os.environ.get('R2_BUCKET_NAME', 'hekamap-assets').strip()
         
         # Supabase Client
         self.supabase: Client = create_client(
-            os.environ['SUPABASE_URL'],
-            os.environ['SUPABASE_KEY']
+            os.environ['SUPABASE_URL'].strip(),
+            os.environ['SUPABASE_KEY'].strip()
         )
         
     def log(self, message: str, level: str = "INFO"):
