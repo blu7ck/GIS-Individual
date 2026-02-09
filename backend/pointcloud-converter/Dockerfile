@@ -22,8 +22,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN wget -q https://github.com/potree/PotreeConverter/releases/download/2.1.1/PotreeConverter_2.1.1_x64_linux.zip \
     && unzip -q PotreeConverter_2.1.1_x64_linux.zip -d /opt/potree_temp \
     && mkdir -p /opt/potree \
-    && find /opt/potree_temp -type f -name "PotreeConverter" -exec cp {} /opt/potree/ \; \
-    && find /opt/potree_temp -type f -name "*.so*" -exec cp {} /opt/potree/ \; \
+    && cp -r /opt/potree_temp/PotreeConverter/* /opt/potree/ 2>/dev/null || cp -r /opt/potree_temp/* /opt/potree/ \
     && chmod +x /opt/potree/PotreeConverter \
     && rm -rf /opt/potree_temp PotreeConverter_2.1.1_x64_linux.zip
 
