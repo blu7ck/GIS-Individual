@@ -1186,6 +1186,12 @@ export default {
           // Construct public R2 URL for output
           const outputBucket = env.PUBLIC_DOMAIN || `https://pub-${env.ACCOUNT_ID}.r2.dev`;
 
+          console.log('Triggering Cloud Run Job with args:', [
+            '--asset-id', assetId,
+            '--input-url', rawFileUrl,
+            '--output-bucket', outputBucket
+          ]);
+
           // Trigger Cloud Run Job
           const jobUrl = `https://${env.GCP_REGION}-run.googleapis.com/v2/projects/${env.GCP_PROJECT_ID}/locations/${env.GCP_REGION}/jobs/pointcloud-converter:run`;
 

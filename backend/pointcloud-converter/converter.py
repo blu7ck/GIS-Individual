@@ -45,6 +45,8 @@ class PointCloudConverter:
             region_name='auto'
         )
         self.bucket_name = os.environ.get('R2_BUCKET_NAME', 'hekamap-assets').strip()
+        endpoint = os.environ.get('R2_ENDPOINT', '').strip()
+        self.log(f"R2 Configuration: Bucket={self.bucket_name}, Endpoint={'Global' if '.eu.' not in endpoint else 'EU-Jurisdiction'}")
         
         # Supabase Client
         self.supabase: Client = create_client(
