@@ -86,7 +86,7 @@ class PointCloudConverter:
         output_dir.mkdir(parents=True, exist_ok=True)
         
         cmd = [
-            'PotreeConverter',
+            '/opt/potree/PotreeConverter',
             str(input_file),
             '-o', str(output_dir),
             '--generate-page', 'viewer'
