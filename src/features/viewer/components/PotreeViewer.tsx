@@ -30,7 +30,14 @@ export const PotreeViewer: React.FC<PotreeViewerProps> = ({ layer, onClose }) =>
 
     // Determine the correct URL to use
     // Potree needs the 'cloud.js' or 'metadata.json' URL
-    const pointCloudUrl = layer.potree_url || layer.tiles_url || layer.url;
+    let pointCloudUrl = layer.potree_url || layer.tiles_url || layer.url;
+
+    // Fix: If it's a directory URL (doesn't end in .json or .js), append metadata.json
+    if (pointCloudUrl && !pointCloudUrl.endsWith('.json') && !pointCloudUrl.endsWith('.js')) {
+        if (!pointCloudUrl.endsWith('/')) pointCloudUrl += '/';
+        pointCloudUrl += 'metadata.json';
+    }
+
     const isProcessing = layer.status === AssetStatus.PROCESSING;
     const hasError = layer.status === AssetStatus.ERROR;
 

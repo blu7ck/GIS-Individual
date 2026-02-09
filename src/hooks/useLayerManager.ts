@@ -25,8 +25,8 @@ export function useLayerManager(
             return;
         }
 
-        // POTREE - Point Cloud
-        if (layer.type === LayerType.POTREE) {
+        // POTREE or LAS - Point Cloud
+        if (layer.type === LayerType.POTREE || layer.type === LayerType.LAS) {
             setActivePotreeLayer(layer);
             return;
         }

@@ -255,8 +255,6 @@ class PointCloudConverter:
             {
                 "status": "READY",
                 "potree_url": potree_url,
-                # If your schema still has tiles_url, leave it untouched or set to None explicitly:
-                "tiles_url": None,
                 "metadata": metadata,
                 "error_message": None,
             }

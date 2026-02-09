@@ -280,7 +280,7 @@ const App: React.FC = () => {
     if (asset.type === LayerType.GLB_UNCOORD) {
       // TODO: Open model viewer
       console.log('Open GLB viewer for:', asset.name);
-    } else if (asset.type === LayerType.POTREE || asset.type === LayerType.TILES_3D) {
+    } else if (asset.type === LayerType.POTREE || asset.type === LayerType.TILES_3D || asset.type === LayerType.LAS) {
       setActivePotreeLayer(asset);
     }
   }, [setActivePotreeLayer]);

@@ -1089,7 +1089,7 @@ export default {
 
           // Iterate through all objects (pagination)
           do {
-            let listUrl = `https://${env.ACCOUNT_ID}.r2.cloudflarestorage.com/${env.BUCKET_NAME}?list-type=2&prefix=uploads/&max-keys=1000`;
+            let listUrl = `https://${env.ACCOUNT_ID}.r2.cloudflarestorage.com/${env.BUCKET_NAME}?list-type=2&max-keys=1000`;
             if (continuationToken) {
               listUrl += `&continuation-token=${encodeURIComponent(continuationToken)}`;
             }

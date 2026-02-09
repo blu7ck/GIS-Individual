@@ -184,7 +184,7 @@ export const ProjectPanel: React.FC<Props> = ({
 
     const handleFocus = (assetId: string) => {
         const asset = assets.find(a => a.id === assetId);
-        if (asset?.type === LayerType.POTREE) {
+        if (asset?.type === LayerType.POTREE || asset?.type === LayerType.LAS) {
             if (onOpenModelViewer) onOpenModelViewer(asset);
         } else if (onLayerClick) {
             onLayerClick(assetId);
