@@ -851,7 +851,9 @@ export default {
             console.log('Deleting all files with prefix:', prefix);
 
             // List all objects with this prefix
-            const listUrl = `https://${env.ACCOUNT_ID}.r2.cloudflarestorage.com/${env.BUCKET_NAME}?list-type=2&prefix=${encodeURIComponent(prefix)}`;
+            // Use the raw prefix, but ensure spaces are handled. 
+            // S3/R2 listing API expects the prefix to be correctly encoded but not double-encoded.
+            const listUrl = `https://${env.ACCOUNT_ID}.r2.cloudflarestorage.com/${env.BUCKET_NAME}?list-type=2&prefix=${prefix.replace(/ /g, '%20')}`;
 
             const listRequest = new Request(listUrl, {
               method: 'GET'

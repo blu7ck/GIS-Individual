@@ -263,6 +263,15 @@ export async function uploadFolderAsset(
 }
 
 /**
+ * Helper to get folder prefix from a file URL
+ */
+function getFolderPrefix(url: string): string {
+    const parts = url.split('/');
+    parts.pop(); // Remove filename
+    return parts.join('/') + '/';
+}
+
+/**
  * Delete an asset
  */
 export async function deleteAsset(
@@ -271,13 +280,37 @@ export async function deleteAsset(
 ): Promise<AssetServiceResult> {
     if (config?.supabaseUrl && config?.supabaseKey) {
         try {
-            // Delete from R2 first
+            // 1. Delete original storage path from R2
             if (asset.storage_path?.startsWith('http') && config.workerUrl) {
-                const isFolder = asset.type === LayerType.TILES_3D;
-                await deleteFromR2(asset.storage_path, config, isFolder);
+                const isFolder = asset.type === LayerType.TILES_3D || asset.type === LayerType.POTREE;
+                const pathToDelete = isFolder ? getFolderPrefix(asset.storage_path) : asset.storage_path;
+
+                try {
+                    await deleteFromR2(pathToDelete, config, isFolder);
+                } catch (e) {
+                    logger.warn('Failed to delete original R2 file/folder:', e);
+                }
             }
 
-            // Delete from Supabase
+            // 2. Delete processed outputs from R2 if they exist
+            if (config?.workerUrl) {
+                if (asset.potree_url?.startsWith('http')) {
+                    try {
+                        await deleteFromR2(getFolderPrefix(asset.potree_url), config, true);
+                    } catch (e) {
+                        logger.warn('Failed to delete processed potree output:', e);
+                    }
+                }
+                if (asset.tiles_url?.startsWith('http')) {
+                    try {
+                        await deleteFromR2(getFolderPrefix(asset.tiles_url), config, true);
+                    } catch (e) {
+                        logger.warn('Failed to delete processed tiles output:', e);
+                    }
+                }
+            }
+
+            // 3. Delete from Supabase
             const supabase = createSupabaseClient(config.supabaseUrl, config.supabaseKey);
             const { error } = await supabase.from('assets').delete().eq('id', asset.id);
 
@@ -482,7 +515,9 @@ async function cleanupR2OnError(
 ): Promise<void> {
     if (url.startsWith('http') && config.workerUrl) {
         try {
-            await deleteFromR2(url, config, type === LayerType.TILES_3D);
+            const isFolder = type === LayerType.TILES_3D || type === LayerType.POTREE;
+            const pathToDelete = isFolder ? getFolderPrefix(url) : url;
+            await deleteFromR2(pathToDelete, config, isFolder);
         } catch (cleanupError) {
             logger.warn('Failed to cleanup R2 file:', cleanupError);
         }
