@@ -145,7 +145,7 @@ export default {
           });
         }
 
-        const { key, type } = requestBody;
+        const { key, type, uploadId, partNumber } = requestBody;
 
         if (!key) {
           return new Response(JSON.stringify({ error: "Missing key parameter" }), {
@@ -175,14 +175,17 @@ export default {
             secretAccessKey: env.R2_SECRET_ACCESS_KEY,
           });
 
-          // R2 S3-compatible endpoint
+          // R2 S3-compatible endpoint (using EU regional endpoint for better stability)
           const accountId = env.ACCOUNT_ID;
           const bucketName = env.BUCKET_NAME;
           const objectKey = key;
 
-          // Create presigned PUT URL for R2 (expires in 1 hour)
-          // Object key is used as-is in the path (S3/R2 API handles path segments)
-          const r2Url = `https://${accountId}.r2.cloudflarestorage.com/${bucketName}/${objectKey}`;
+          let r2Url = `https://${accountId}.eu.r2.cloudflarestorage.com/${bucketName}/${objectKey}`;
+
+          // If partNumber and uploadId are present, it's a Part Upload
+          if (partNumber && uploadId) {
+            r2Url += `?partNumber=${partNumber}&uploadId=${uploadId}`;
+          }
 
           const signedRequest = new Request(r2Url, {
             method: 'PUT',
@@ -192,12 +195,11 @@ export default {
           });
 
           // Sign the request with query parameters (presigned URL)
-          // R2 requires 'auto' region and 's3' service for presigned URLs
           const signed = await client.sign(signedRequest, {
             aws: {
               signQuery: true,
               service: 's3',
-              region: 'auto', // R2 uses 'auto' region
+              region: 'auto',
             }
           });
 
@@ -232,7 +234,75 @@ export default {
         }
       }
 
-      // --- 2. SEND SHARE EMAIL (Mailgun) ---
+      // --- 1.1 MULTIPART UPLOAD: START ---
+      if (url.pathname === '/multipart/start' && request.method === 'POST') {
+        const { key, type } = await request.json();
+        const client = new AwsClient({
+          accessKeyId: env.R2_ACCESS_KEY_ID,
+          secretAccessKey: env.R2_SECRET_ACCESS_KEY,
+        });
+
+        const r2Url = `https://${env.ACCOUNT_ID}.eu.r2.cloudflarestorage.com/${env.BUCKET_NAME}/${key}?uploads`;
+        const startRequest = new Request(r2Url, {
+          method: 'POST',
+          headers: { 'Content-Type': type || 'application/octet-stream' }
+        });
+        const signedStart = await client.sign(startRequest, { aws: { service: 's3', region: 'auto' } });
+        const response = await fetch(signedStart);
+        const xml = await response.text();
+
+        const uploadIdMatch = xml.match(/<UploadId>([^<]+)<\/UploadId>/);
+        if (!uploadIdMatch) {
+          return new Response(JSON.stringify({ error: "Failed to start multipart upload", details: xml }), {
+            status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+
+        return new Response(JSON.stringify({ uploadId: uploadIdMatch[1] }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+
+      // --- 1.2 MULTIPART UPLOAD: COMPLETE ---
+      if (url.pathname === '/multipart/complete' && request.method === 'POST') {
+        const { key, uploadId, parts } = await request.json();
+        const client = new AwsClient({
+          accessKeyId: env.R2_ACCESS_KEY_ID,
+          secretAccessKey: env.R2_SECRET_ACCESS_KEY,
+        });
+
+        // Build ETag XML
+        let xml = '<CompleteMultipartUpload xmlns="http://s3.amazonaws.com/doc/2006-03-01/">';
+        for (const part of parts) {
+          xml += `<Part><PartNumber>${part.partNumber}</PartNumber><ETag>${part.etag}</ETag></Part>`;
+        }
+        xml += '</CompleteMultipartUpload>';
+
+        const r2Url = `https://${env.ACCOUNT_ID}.eu.r2.cloudflarestorage.com/${env.BUCKET_NAME}/${key}?uploadId=${uploadId}`;
+        const completeRequest = new Request(r2Url, {
+          method: 'POST',
+          body: xml,
+          headers: { 'Content-Type': 'application/xml' }
+        });
+
+        const signedComplete = await client.sign(completeRequest, { aws: { service: 's3', region: 'auto' } });
+        const response = await fetch(signedComplete);
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          return new Response(JSON.stringify({ error: "Failed to complete upload", details: errorText }), {
+            status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+
+        const publicUrl = env.PUBLIC_DOMAIN
+          ? `${env.PUBLIC_DOMAIN}/${key}`
+          : `https://pub-${env.ACCOUNT_ID}.r2.dev/${key}`;
+
+        return new Response(JSON.stringify({ success: true, publicUrl }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
       if (url.pathname === '/send-share-email' && request.method === 'POST') {
         console.log('send-share-email endpoint hit');
         try {

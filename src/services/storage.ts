@@ -9,25 +9,85 @@ interface PresignedResponse {
 
 /**
  * Uploads a single file using a Presigned URL flow.
+ * Automatically chooses between standard PUT and Multipart Upload for large files.
  */
 export const uploadToR2 = async (file: File, config: StorageConfig, onProgress?: (progress: number) => void, signal?: AbortSignal): Promise<string> => {
   if (!config.workerUrl) {
     throw new Error("Missing Backend Worker URL");
   }
 
-  // 1. Generate unique key
-  // Sanitize filename: remove spaces, special chars that might break URLs
   const sanitizedName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
   const key = `uploads/${Date.now()}-${sanitizedName}`;
 
-  // 2. Get Presigned URL
+  // Use multipart for files > 20MB
+  const MULTIPART_THRESHOLD = 20 * 1024 * 1024;
+  if (file.size > MULTIPART_THRESHOLD) {
+    logger.debug(`File size (${(file.size / 1024 / 1024).toFixed(2)}MB) exceeds threshold. Using Multipart Upload.`);
+    return uploadToR2Multipart(file, key, config, onProgress, signal);
+  }
+
+  // 1. Get Presigned URL (Standard PUT)
   const { uploadUrl, publicUrl } = await getPresignedUrl(config.workerUrl, key, file.type);
 
-  // 3. Perform PUT upload with Retries and Progress
+  // 2. Perform PUT upload with Retries and Progress
   await performUpload(uploadUrl, file, 3, onProgress, signal);
 
   return publicUrl;
 };
+
+/**
+ * Handles R2 Multipart Upload for large files.
+ */
+async function uploadToR2Multipart(file: File, key: string, config: StorageConfig, onProgress?: (progress: number) => void, signal?: AbortSignal): Promise<string> {
+  const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks
+  const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+
+  // 1. Start Multipart Upload
+  const startResp = await fetch(`${config.workerUrl}/multipart/start`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ key, type: file.type })
+  });
+
+  if (!startResp.ok) throw new Error(`Failed to start multipart upload: ${await startResp.text()}`);
+  const { uploadId } = await startResp.json();
+
+  // 2. Upload Chunks
+  const parts: { etag: string; partNumber: number }[] = [];
+
+  for (let i = 0; i < totalChunks; i++) {
+    if (signal?.aborted) throw new Error('Upload cancelled');
+
+    const start = i * CHUNK_SIZE;
+    const end = Math.min(file.size, start + CHUNK_SIZE);
+    const chunk = file.slice(start, end);
+    const partNumber = i + 1;
+
+    // Get presigned URL for this part
+    const { uploadUrl } = await getPresignedUrl(config.workerUrl, key, file.type, uploadId, partNumber);
+
+    // Upload part and get ETag
+    const etag = await performPartUpload(uploadUrl, chunk, 3, (partPercent) => {
+      const overallProgress = ((i + partPercent / 100) / totalChunks) * 100;
+      onProgress?.(overallProgress);
+    }, signal);
+
+    parts.push({ etag, partNumber });
+  }
+
+  // 3. Complete Multipart Upload
+  const completeResp = await fetch(`${config.workerUrl}/multipart/complete`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ key, uploadId, parts })
+  });
+
+  if (!completeResp.ok) throw new Error(`Failed to complete multipart upload: ${await completeResp.text()}`);
+  const { publicUrl } = await completeResp.json();
+
+  onProgress?.(100);
+  return publicUrl;
+}
 
 /**
  * Helper: Safely extract folder name from FileList.
@@ -209,13 +269,13 @@ export const uploadFolderToR2 = async (files: FileList, type: LayerType, config:
 /**
  * Helper: Call the backend worker to get a presigned PUT URL.
  */
-async function getPresignedUrl(workerUrl: string, key: string, type: string): Promise<PresignedResponse> {
+async function getPresignedUrl(workerUrl: string, key: string, type: string, uploadId?: string, partNumber?: number): Promise<PresignedResponse> {
   const response = await fetch(workerUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ key, type }),
+    body: JSON.stringify({ key, type, uploadId, partNumber }),
   });
 
   if (!response.ok) {
@@ -311,11 +371,61 @@ async function performUpload(url: string, file: File, retries = 3, onProgress?: 
       if (attempt === retries - 1) {
         throw new Error(`Upload failed after ${retries} attempts: ${(error as Error).message}`);
       }
-      // Wait before retry (exponential backoff: 500ms, 1000ms, 2000ms)
+      // Wait before retry (exponential backoff)
       const delay = 500 * Math.pow(2, attempt);
       await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
+}
+
+/**
+ * Uploads a single part/chunk and returns its ETag.
+ */
+async function performPartUpload(url: string, chunk: Blob, retries = 3, onProgress?: (progress: number) => void, signal?: AbortSignal): Promise<string> {
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      if (signal?.aborted) throw new Error('Upload cancelled');
+
+      const xhr = new XMLHttpRequest();
+
+      return new Promise<string>((resolve, reject) => {
+        if (signal) {
+          signal.addEventListener('abort', () => {
+            xhr.abort();
+            reject(new Error('Upload cancelled'));
+          });
+        }
+
+        xhr.upload.addEventListener('progress', (e) => {
+          if (e.lengthComputable && onProgress) {
+            onProgress((e.loaded / e.total) * 100);
+          }
+        });
+
+        xhr.addEventListener('load', () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            const etag = xhr.getResponseHeader('ETag');
+            if (!etag) reject(new Error('No ETag received from R2'));
+            else resolve(etag);
+          } else {
+            reject(new Error(`HTTP ${xhr.status}`));
+          }
+        });
+
+        xhr.addEventListener('error', () => reject(new Error('Network error')));
+        xhr.addEventListener('abort', () => reject(new Error('Upload cancelled')));
+
+        xhr.open('PUT', url);
+        xhr.send(chunk);
+      });
+    } catch (error) {
+      if ((error as Error).message === 'Upload cancelled') throw error;
+      if (attempt === retries - 1) throw error;
+      const delay = 500 * Math.pow(2, attempt);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+  throw new Error('Upload failed');
 }
 
 /**
