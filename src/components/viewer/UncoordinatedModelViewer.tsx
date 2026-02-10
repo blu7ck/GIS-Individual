@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { X, Loader2, AlertCircle } from 'lucide-react';
+import { X, Loader2, AlertCircle, Info, MousePointer2, Box } from 'lucide-react';
 import { Layer } from '../../types';
 
 interface Props {
@@ -11,7 +11,7 @@ export const UncoordinatedModelViewer: React.FC<Props> = ({ layer, onClose }) =>
   const [hasError, setHasError] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string>('');
-  const [loadingProgress, setLoadingProgress] = useState<number>(0); // 0-100
+  const [loadingProgress, setLoadingProgress] = useState<number>(0);
   const modelViewerRef = useRef<any>(null);
 
   useEffect(() => {
@@ -24,17 +24,19 @@ export const UncoordinatedModelViewer: React.FC<Props> = ({ layer, onClose }) =>
 
   if (!layer || (!layer.blobUrl && !layer.url)) return null;
 
-  // Cast custom element to any to avoid TypeScript errors without polluting global JSX namespace
+  // Cast custom element to any to avoid TypeScript errors
   const ModelViewer = 'model-viewer' as any;
 
   // Use URL if available, fallback to blobUrl
   const src = layer.url || layer.blobUrl;
 
   const handleLoad = useCallback(() => {
-    console.log('Model loaded successfully');
     setLoadingProgress(100);
-    setIsLoading(false);
-    setHasError(false);
+    // Add small delay for smooth transition
+    setTimeout(() => {
+      setIsLoading(false);
+      setHasError(false);
+    }, 500);
   }, []);
 
   const handleError = useCallback((e: any) => {
@@ -49,25 +51,19 @@ export const UncoordinatedModelViewer: React.FC<Props> = ({ layer, onClose }) =>
   const handleProgress = useCallback((e: any) => {
     try {
       const progress = e.detail?.totalProgress ?? 0;
-      const progressPercent = Math.min(100, Math.max(0, Math.round(progress * 100)));
-      setLoadingProgress(progressPercent);
+      const progressPercent = Math.min(99, Math.max(0, Math.round(progress * 100)));
 
-      // When progress reaches 100%, model is fully loaded
-      if (progressPercent >= 100) {
-        setIsLoading(false);
-        setHasError(false);
-      }
+      setLoadingProgress((prev) => {
+        // Progress should only go forward
+        if (progressPercent > prev) return progressPercent;
+        return prev;
+      });
+
     } catch (err) {
       console.warn('Error handling progress event:', err);
     }
   }, []);
 
-  // NOTE: Removed fetch-based progress tracking (trackDownloadProgress) because it was
-  // conflicting with model-viewer's native progress events, causing the loading bar
-  // to jump between values (e.g., 80% -> real value -> 80%)
-  // model-viewer handles progress tracking internally and emits 'progress' events
-
-  // Attach event listeners to model-viewer element for progress tracking
   useEffect(() => {
     if (!src || hasError) return;
 
@@ -76,172 +72,205 @@ export const UncoordinatedModelViewer: React.FC<Props> = ({ layer, onClose }) =>
     const setupListeners = (element: any) => {
       if (!element) return;
 
-      element.addEventListener('progress', handleProgress);
-      element.addEventListener('load', handleLoad);
-      element.addEventListener('error', handleError);
+      const onProgress = (e: any) => handleProgress(e);
+      const onLoad = () => handleLoad();
+      const onError = (e: any) => handleError(e);
+
+      element.addEventListener('progress', onProgress);
+      element.addEventListener('load', onLoad);
+      element.addEventListener('poster-dismissed', onLoad); // Mobile fallback
+      element.addEventListener('error', onError);
+
+      if (element.loaded) {
+        handleLoad();
+      }
 
       return () => {
-        element.removeEventListener('progress', handleProgress);
-        element.removeEventListener('load', handleLoad);
-        element.removeEventListener('error', handleError);
+        element.removeEventListener('progress', onProgress);
+        element.removeEventListener('load', onLoad);
+        element.removeEventListener('poster-dismissed', onLoad);
+        element.removeEventListener('error', onError);
       };
     };
 
     const modelViewer = modelViewerRef.current;
-    if (!modelViewer) {
-      // If ref not ready, try to find it in DOM
-      const checkModelViewer = setInterval(() => {
+    if (modelViewer) {
+      cleanup = setupListeners(modelViewer);
+    } else {
+      const timeout = setTimeout(() => {
         const found = document.querySelector('model-viewer') as any;
-        if (found) {
-          if (!modelViewerRef.current) {
-            modelViewerRef.current = found;
-          }
+        if (found && !cleanup) {
           cleanup = setupListeners(found);
-          clearInterval(checkModelViewer);
         }
-      }, 100);
-      return () => {
-        clearInterval(checkModelViewer);
-        if (cleanup) cleanup();
-      };
+      }, 500);
+      return () => clearTimeout(timeout);
     }
-
-    cleanup = setupListeners(modelViewer);
 
     return () => {
       if (cleanup) cleanup();
     };
   }, [src, hasError, handleProgress, handleLoad, handleError]);
 
-  // Check if model-viewer reports loaded state (backup check)
+  // Smoother progress bar when it sticks at high values (before load)
   useEffect(() => {
-    if (!src || hasError || !isLoading) return;
-
-    const checkLoaded = setInterval(() => {
-      const modelViewer = modelViewerRef.current || document.querySelector('model-viewer') as any;
-      if (modelViewer?.loaded && isLoading) {
-        setLoadingProgress(100);
-        setIsLoading(false);
-        setHasError(false);
-        clearInterval(checkLoaded);
-      }
-
-      // Also check progress property if available (model-viewer internal state)
-      if (modelViewer && typeof modelViewer.progress === 'number') {
-        const progress = Math.min(100, Math.max(0, Math.round(modelViewer.progress * 100)));
-        if (progress > loadingProgress) {
-          setLoadingProgress(progress);
-        }
-        if (progress >= 100 && isLoading) {
-          setIsLoading(false);
-          clearInterval(checkLoaded);
-        }
-      }
-    }, 200); // Check every 200ms for faster response
-
-    return () => clearInterval(checkLoaded);
-  }, [src, isLoading, hasError, loadingProgress]);
-
-  // No timeout - let it load indefinitely until complete
+    if (isLoading && loadingProgress >= 90 && loadingProgress < 99) {
+      const interval = setInterval(() => {
+        setLoadingProgress(prev => {
+          if (prev < 99) return prev + 0.1;
+          return prev;
+        });
+      }, 200);
+      return () => clearInterval(interval);
+    }
+    return undefined;
+  }, [isLoading, loadingProgress]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-      <div className="bg-gray-900 w-[90vw] h-[85vh] rounded-xl border border-gray-700 shadow-2xl overflow-hidden relative flex flex-col">
-        <div className="bg-gray-800 p-4 border-b border-gray-700 flex justify-between items-center">
-          <div>
-            <h2 className="text-emerald-400 font-bold text-lg">{layer.name}</h2>
-            <p className="text-xs text-gray-400">3D Model Viewer - GLTF/GLB</p>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4 md:p-8 animate-in fade-in duration-300">
+      <div className="bg-[#111] w-full h-full max-w-[1400px] max-h-[900px] rounded-2xl border border-carta-gold-500/20 shadow-[0_0_50px_rgba(0,0,0,0.5)] overflow-hidden relative flex flex-col">
+        {/* Header */}
+        <div className="bg-[#1a1a1a]/80 backdrop-blur-sm p-4 border-b border-white/5 flex justify-between items-center z-30">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-carta-gold-500/10 flex items-center justify-center border border-carta-gold-500/20">
+              <Box className="text-carta-gold-500" size={20} />
+            </div>
+            <div>
+              <h2 className="text-white font-bold tracking-tight">{layer.name}</h2>
+              <p className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-carta-gold-500 animate-pulse" />
+                3D Model Viewer • CartaX Precision
+              </p>
+            </div>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-gray-700 rounded-full text-gray-300 hover:text-white transition">
-            <X size={24} />
+          <button
+            onClick={onClose}
+            className="w-10 h-10 flex items-center justify-center hover:bg-white/5 rounded-full text-gray-400 hover:text-white transition-all transform hover:rotate-90"
+          >
+            <X size={20} />
           </button>
         </div>
 
-        <div className="flex-1 relative bg-[#1a1a1a]">
+        <div className="flex-1 relative bg-gradient-to-b from-[#1a1a1a] to-[#0a0a0a]">
           {isLoading && (
-            <div className="absolute inset-0 flex items-center justify-center bg-[#1a1a1a] z-20">
-              <div className="text-center w-full max-w-md px-8">
-                <Loader2 className="animate-spin text-emerald-400 mx-auto mb-6" size={48} />
-                <p className="text-gray-300 text-lg mb-4 font-medium">Model yükleniyor...</p>
-                <p className="text-xs text-gray-500 mb-6 truncate" title={layer.name}>{layer.name}</p>
+            <div className="absolute inset-0 flex items-center justify-center bg-[#0a0a0a] z-20">
+              <div className="text-center w-full max-w-sm px-8 relative">
+                <div className="relative mb-8 flex justify-center">
+                  <div className="absolute inset-0 bg-carta-gold-500/20 blur-2xl rounded-full" />
+                  <Loader2 className="animate-spin text-carta-gold-500 relative" size={48} />
+                </div>
 
-                {/* Progress Bar */}
-                <div className="w-full bg-gray-700 rounded-full h-3 mb-2 overflow-hidden">
+                <p className="text-white text-lg mb-2 font-bold tracking-tight">Model Hazırlanıyor</p>
+                <p className="text-[11px] text-gray-500 mb-8 truncate uppercase tracking-widest">{layer.name}</p>
+
+                {/* Modern Progress Bar */}
+                <div className="w-full bg-white/5 rounded-full h-1.5 mb-3 overflow-hidden relative">
                   <div
-                    className="bg-emerald-500 h-full rounded-full transition-all duration-300 ease-out shadow-lg shadow-emerald-500/50"
+                    className="bg-carta-gold-500 h-full rounded-full transition-all duration-300 ease-out shadow-[0_0_15px_rgba(245,158,11,0.5)]"
                     style={{ width: `${loadingProgress}%` }}
                   />
                 </div>
 
-                {/* Progress Percentage */}
-                <p className="text-emerald-400 text-sm font-mono mb-2">{loadingProgress}%</p>
-
-                {/* Loading Status */}
-                {loadingProgress > 0 && loadingProgress < 100 && (
-                  <p className="text-xs text-gray-500 mt-2">Dosya indiriliyor...</p>
-                )}
-                {loadingProgress === 0 && (
-                  <p className="text-xs text-gray-500 mt-2">Başlatılıyor...</p>
-                )}
+                <div className="flex justify-between items-center px-1">
+                  <span className="text-[10px] text-gray-500 font-mono uppercase">Yükleniyor</span>
+                  <span className="text-carta-gold-500 text-sm font-mono font-bold leading-none">{Math.floor(loadingProgress)}%</span>
+                </div>
               </div>
             </div>
           )}
 
           {hasError ? (
-            <div className="absolute inset-0 flex items-center justify-center bg-[#1a1a1a] z-20">
-              <div className="text-center max-w-md p-8">
-                <AlertCircle className="text-red-400 mx-auto mb-4" size={48} />
-                <p className="text-red-400 text-lg mb-2">Model yüklenemedi</p>
+            <div className="absolute inset-0 flex items-center justify-center bg-[#0a0a0a] z-20">
+              <div className="text-center max-w-md p-8 bg-black/40 rounded-3xl border border-red-500/20 backdrop-blur-xl">
+                <div className="w-16 h-16 bg-red-500/10 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-red-500/30">
+                  <AlertCircle className="text-red-500" size={32} />
+                </div>
+                <h3 className="text-white text-xl font-bold mb-3">Model yüklenemedi</h3>
                 {errorMessage && (
-                  <p className="text-gray-400 text-sm mb-4">{errorMessage}</p>
+                  <p className="text-gray-400 text-sm mb-6 leading-relaxed">{errorMessage}</p>
                 )}
-                <p className="text-xs text-gray-500 break-all">{src}</p>
-                <button
-                  onClick={() => {
-                    setHasError(false);
-                    setIsLoading(true);
-                    setErrorMessage('');
-                    setLoadingProgress(0);
-                    // Force remount by updating key
-                  }}
-                  className="mt-4 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded transition"
-                >
-                  Tekrar Dene
-                </button>
+                <div className="flex flex-col gap-3">
+                  <button
+                    onClick={() => {
+                      setHasError(false);
+                      setIsLoading(true);
+                      setErrorMessage('');
+                      setLoadingProgress(0);
+                    }}
+                    className="px-6 py-3 bg-carta-gold-500 hover:bg-carta-gold-600 text-white rounded-xl font-bold transition-all shadow-lg shadow-carta-gold-900/20"
+                  >
+                    Tekrar Dene
+                  </button>
+                  <button
+                    onClick={onClose}
+                    className="px-6 py-3 bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white rounded-xl font-medium transition-all"
+                  >
+                    Kapat
+                  </button>
+                </div>
               </div>
             </div>
           ) : (
-            <ModelViewer
-              ref={modelViewerRef}
-              key={`model-${layer.id}-${src}`}
-              src={src}
-              alt={layer.name}
-              auto-rotate
-              camera-controls
-              shadow-intensity="1"
-              exposure="1.2"
-              environment-image="neutral"
-              interaction-policy="allow-when-focused"
-              tone-mapping="auto"
-              style={{
-                width: '100%',
-                height: '100%',
-                backgroundColor: '#111',
-                display: isLoading ? 'none' : 'block' // Hide until fully loaded
-              }}
-              // Additional props for better compatibility
-              loading="eager" // lazy yerine eager - daha hızlı yükleme
-              reveal="auto" // interaction yerine auto - otomatik göster
-              ar={false} // AR kapalı
-              ar-modes=""
-            >
-              <div className="absolute bottom-4 left-4 text-xs text-gray-500 bg-black/50 p-2 rounded pointer-events-none z-10">
-                <div>Left Click: Rotate</div>
-                <div>Right Click: Pan</div>
-                <div>Scroll: Zoom</div>
-                <div>Shift+Drag: Pan</div>
-              </div>
-            </ModelViewer>
+            <div className="w-full h-full relative cursor-grab active:cursor-grabbing">
+              <ModelViewer
+                ref={modelViewerRef}
+                key={`model-${layer.id}-${src}`}
+                src={src}
+                alt={layer.name}
+                auto-rotate
+                camera-controls
+                shadow-intensity="2"
+                shadow-softness="1"
+                exposure="1.0"
+                environment-image="neutral"
+                interaction-policy="always-allow"
+                tone-mapping="neutral"
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  display: isLoading ? 'none' : 'block',
+                  touchAction: 'none'
+                }}
+                loading="eager"
+                reveal="auto"
+                ar={false}
+              >
+                {/* Controls Info */}
+                <div className="absolute bottom-6 left-6 z-10 flex flex-col gap-2">
+                  <div className="bg-black/60 backdrop-blur-md border border-white/10 p-4 rounded-2xl pointer-events-none group transition-all duration-300 hover:border-carta-gold-500/40">
+                    <div className="flex items-center gap-2 mb-3 text-carta-gold-500">
+                      <MousePointer2 size={14} />
+                      <span className="text-[10px] font-bold uppercase tracking-wider">Kontroller</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-[11px]">
+                      <div className="flex items-center gap-2 text-gray-400">
+                        <span className="w-1.5 h-1.5 rounded-full bg-white/20" />
+                        <span>Sol Tık : Döndürme</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-gray-400">
+                        <span className="w-1.5 h-1.5 rounded-full bg-white/20" />
+                        <span>Sağ Tık : Kaydırma</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-gray-400">
+                        <span className="w-1.5 h-1.5 rounded-full bg-white/20" />
+                        <span>Tekerlek : Yakınlaştır</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-gray-400">
+                        <span className="w-1.5 h-1.5 rounded-full bg-white/20" />
+                        <span>Shift+Sürükle : Kaydır</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Model Stats / Credits if any */}
+                <div className="absolute top-6 right-6 z-10 hidden md:block">
+                  <div className="bg-black/40 backdrop-blur-sm border border-white/5 px-3 py-1.5 rounded-lg flex items-center gap-2 text-[10px] text-gray-500">
+                    <Info size={12} />
+                    <span>PBR Rendering Active</span>
+                  </div>
+                </div>
+              </ModelViewer>
+            </div>
           )}
         </div>
       </div>

@@ -171,6 +171,11 @@ export const QualitySettingsPanel: React.FC<Props> = ({
                         </button>
                     ))}
                 </div>
+                {qualitySettings.performanceMode === PerformanceMode.BATTERY_SAVER && (
+                    <p className="text-[9px] text-orange-400/80 font-medium italic mt-2 text-center animate-in fade-in slide-in-from-top-1">
+                        * Arayüz efektleri ve cam şeffaflığı performansı artırmak için devre dışı bırakıldı.
+                    </p>
+                )}
             </div>
             {/* Advanced Toggle */}
             <div className="pt-2">

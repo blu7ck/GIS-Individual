@@ -33,14 +33,14 @@ export const BottomStatusBar: React.FC<BottomStatusBarProps> = ({
             </div>
 
             {/* CENTER: Branding */}
-            <div className="absolute left-1/2 top-0 h-full flex items-center -translate-x-1/2">
+            <div className="absolute left-1/2 top-0 h-full hidden md:flex items-center -translate-x-1/2">
                 <span className="text-[10px] text-engineering-text-muted">
                     Powered by <span className="text-engineering-primary font-semibold">Fixurelabs</span>
                 </span>
             </div>
 
             {/* RIGHT: Elev, Alt, Projection (WGS84) */}
-            <div className="flex items-center gap-4 h-full">
+            <div className="hidden sm:flex items-center gap-4 h-full">
                 <div className="flex items-center gap-2">
                     <span className="text-engineering-text-secondary">ELEV</span>
                     <span className="text-engineering-text-primary">

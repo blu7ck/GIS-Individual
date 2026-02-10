@@ -71,9 +71,9 @@ export const StorageBar: React.FC<Props> = ({ storageConfig, maxStorageGB = 10, 
     const usedPercent = stats ? Math.min((stats.totalGB / maxStorageGB) * 100, 100) : 0;
 
     const getBarColor = () => {
-        if (usedPercent > 90) return 'bg-red-500';
-        if (usedPercent > 70) return 'bg-yellow-500';
-        return 'bg-[#12B285]';
+        if (usedPercent > 90) return 'bg-[#EF4444]'; // Red-500
+        if (usedPercent > 70) return 'bg-[#F59E0B]'; // Amber-500
+        return 'bg-[#06B6D4]'; // Cyan-500
     };
 
     const handleWipeStorage = async () => {
@@ -156,60 +156,66 @@ export const StorageBar: React.FC<Props> = ({ storageConfig, maxStorageGB = 10, 
 
     return (
         <>
-            <div className="px-3 py-2 border-t border-[#57544F]/30 bg-[#1C1B19]/50">
-                <div className="flex items-center justify-between mb-1">
-                    <div className="flex items-center gap-1.5 text-[10px] text-gray-400">
-                        <HardDrive size={12} className="text-gray-500" />
-                        <span>Storage</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <div className="text-[10px] text-gray-400">
+            <div className="px-4 py-3 border-t border-white/5 bg-black/10 backdrop-blur-xl">
+                <div className="flex items-center justify-between mb-3">
+                    <div className="flex flex-col">
+                        <div className="flex items-center gap-1.5 mb-0.5">
+                            <HardDrive size={14} className="text-cyan-400" />
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Bulut Depolama</span>
+                        </div>
+                        <div className="text-[11px] text-gray-500 font-mono">
                             {loading ? (
-                                <span className="animate-pulse">Loading...</span>
+                                <span className="animate-pulse">Güncelleniyor...</span>
                             ) : error ? (
-                                <span className="text-red-400">Error</span>
+                                <span className="text-red-400">Bağlantı Hatası</span>
                             ) : stats ? (
-                                <span>{formatSize(stats.totalBytes)} / {maxStorageGB} GB</span>
+                                <span className="text-gray-400">
+                                    <strong className="text-gray-200">{formatSize(stats.totalBytes)}</strong> / {maxStorageGB} GB
+                                </span>
                             ) : (
                                 <span>--</span>
                             )}
                         </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
                         {/* Wipe All Button */}
                         <button
                             onClick={() => setShowWipeModal(true)}
-                            className="p-1 text-red-500 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
-                            title="Wipe All Storage (Dangerous!)"
+                            className="p-2 text-gray-500 hover:text-red-500 hover:bg-white/5 rounded-lg transition-all"
+                            title="Tüm Veriyi Sil"
                         >
-                            <Trash2 size={12} />
+                            <Trash2 size={14} />
                         </button>
 
                         {/* Reset Warnings Button */}
                         <button
                             onClick={() => {
-                                if (window.confirm('Reset "Don\'t ask again" warnings? Page will reload.')) {
-                                    localStorage.removeItem('gis_individual_delete_dont_ask');
+                                if (window.confirm('Uyarı ayarları sıfırlansın mı? Sayfa yeniden yüklenecek.')) {
+                                    localStorage.removeItem('cartax_delete_dont_ask');
                                     window.location.reload();
                                 }
                             }}
-                            className="p-1 text-gray-500 hover:text-white hover:bg-white/10 rounded transition-colors"
-                            title="Reset Warnings"
+                            className="p-2 text-gray-500 hover:text-white hover:bg-white/5 rounded-lg transition-all"
+                            title="Uyarıları Sıfırla"
                         >
-                            <RotateCcw size={12} />
+                            <RotateCcw size={14} />
                         </button>
                     </div>
                 </div>
 
                 {/* Progress bar */}
-                <div className="h-1.5 bg-[#57544F]/30 rounded-full overflow-hidden">
+                <div className="h-1.5 bg-white/5 rounded-full overflow-hidden border border-white/5">
                     <div
-                        className={`h-full ${getBarColor()} transition-all duration-500 ease-out rounded-full`}
+                        className={`h-full ${getBarColor()} transition-all duration-1000 ease-out rounded-full shadow-[0_0_10px_rgba(6,182,212,0.2)]`}
                         style={{ width: `${usedPercent}%` }}
                     />
                 </div>
 
                 {stats && !loading && !error && (
-                    <div className="text-[9px] text-gray-500 mt-1 text-right">
-                        {stats.fileCount} files
+                    <div className="flex justify-between items-center mt-2.5">
+                        <span className="text-[9px] text-gray-600 font-bold uppercase tracking-tight">{stats.fileCount} DOSYA</span>
+                        <span className="text-[9px] text-gray-600 font-bold uppercase tracking-tight">%{usedPercent.toFixed(1)} DOLU</span>
                     </div>
                 )}
             </div>

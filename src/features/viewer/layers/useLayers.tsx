@@ -16,9 +16,10 @@ interface UseLayersProps {
     tilesetRefs: React.MutableRefObject<Map<string, Cesium.Cesium3DTileset>>;
     kmlRefs: React.MutableRefObject<Map<string, Cesium.KmlDataSource>>;
     geoJsonRefs: React.MutableRefObject<Map<string, Cesium.GeoJsonDataSource>>;
+    modelRefs: React.MutableRefObject<Map<string, Cesium.Entity>>;
 }
 
-export function useLayers({ viewer, layers, flyToLayerId, onFlyToComplete, onTilesetClick, qualitySettings, tilesetRefs, kmlRefs, geoJsonRefs }: UseLayersProps) {
+export function useLayers({ viewer, layers, flyToLayerId, onFlyToComplete, onTilesetClick, qualitySettings, tilesetRefs, kmlRefs, geoJsonRefs, modelRefs }: UseLayersProps) {
 
     const isMobile = useMemo(() => isMobileDevice(), []);
 
@@ -241,10 +242,41 @@ export function useLayers({ viewer, layers, flyToLayerId, onFlyToComplete, onTil
 
         // Expose global hook for real-time slider updates (from ProjectPanel)
         const win = window as any;
-        win.__fixurelabsApplyTransform = (layerId: string, height: number, scale: number = 1.0) => {
+        win.__fixurelabsApplyTransform = (layerId: string, transform: { height?: number; scale?: number; offsetX?: number; offsetY?: number; rotation?: number }) => {
             const ts = tilesetRefs.current.get(layerId);
+            const { height = 0, scale = 1.0, offsetX = 0, offsetY = 0, rotation = 0 } = transform;
+
             if (ts) {
                 applyTilesetTransform(ts, height, scale);
+            }
+
+            // Also check for GLB models
+            const entity = modelRefs.current.get(layerId);
+            if (entity) {
+                const layer = layers.find(l => l.id === layerId);
+                if (layer && layer.position) {
+                    // Start from base position
+                    const basePos = Cesium.Cartesian3.fromDegrees(layer.position.lng, layer.position.lat, layer.position.height || 0);
+
+                    // Apply offsets (m)
+                    let finalPos = basePos;
+                    if (offsetX !== 0 || offsetY !== 0 || height !== 0) {
+                        const enuMatrix = Cesium.Transforms.eastNorthUpToFixedFrame(basePos);
+                        const offsetCartesian = new Cesium.Cartesian3(offsetX, offsetY, height);
+                        finalPos = Cesium.Matrix4.multiplyByPoint(enuMatrix, offsetCartesian, new Cesium.Cartesian3());
+                    }
+
+                    entity.position = new Cesium.ConstantPositionProperty(finalPos);
+
+                    // Update scale & orientation
+                    if (entity.model) {
+                        entity.model.scale = new Cesium.ConstantProperty(scale);
+                    }
+
+                    const heading = Cesium.Math.toRadians(rotation);
+                    const hpr = new Cesium.HeadingPitchRoll(heading, 0, 0);
+                    entity.orientation = new Cesium.ConstantProperty(Cesium.Transforms.headingPitchRollQuaternion(finalPos, hpr));
+                }
             }
         };
 
@@ -252,6 +284,88 @@ export function useLayers({ viewer, layers, flyToLayerId, onFlyToComplete, onTil
             delete win.__fixurelabsApplyTransform;
         };
     }, [viewer, layers, isMobile, qualitySettings]);
+
+    // 5. Manage GLB Models (Georeferenced)
+    useEffect(() => {
+        if (!viewer || viewer.isDestroyed()) return;
+
+        const glbLayers = layers.filter(l => l.type === LayerType.GLB_UNCOORD && l.position);
+        const currentIds = new Set(glbLayers.map(l => l.id));
+
+        // Remove old models
+        modelRefs.current.forEach((entity, id) => {
+            if (!currentIds.has(id)) {
+                viewer.entities.remove(entity);
+                modelRefs.current.delete(id);
+            }
+        });
+
+        // Add/update models
+        glbLayers.forEach(layer => {
+            if (!layer.position) return;
+
+            const { lat, lng, height } = layer.position;
+            if (isNaN(lat) || isNaN(lng)) {
+                console.warn(`[useLayers] Invalid position for GLB layer ${layer.id}:`, layer.position);
+                return;
+            }
+
+            let entity = modelRefs.current.get(layer.id);
+
+            // Calculate final position with offsets (meters)
+            const basePos = Cesium.Cartesian3.fromDegrees(lng, lat, height || 0);
+            let finalPos = basePos;
+            const offX = layer.offsetX || 0;
+            const offY = layer.offsetY || 0;
+            const offH = layer.heightOffset || 0;
+
+            if (offX !== 0 || offY !== 0 || offH !== 0) {
+                const enuMatrix = Cesium.Transforms.eastNorthUpToFixedFrame(basePos);
+                const offsetCartesian = new Cesium.Cartesian3(offX, offY, offH);
+                finalPos = Cesium.Matrix4.multiplyByPoint(enuMatrix, offsetCartesian, new Cesium.Cartesian3());
+            }
+
+            const heading = Cesium.Math.toRadians(layer.rotation || 0);
+            const hpr = new Cesium.HeadingPitchRoll(heading, 0, 0);
+            const orientation = Cesium.Transforms.headingPitchRollQuaternion(finalPos, hpr);
+
+            if (!entity) {
+                try {
+                    entity = viewer.entities.add({
+                        id: layer.id,
+                        name: layer.name,
+                        position: finalPos,
+                        orientation: orientation,
+                        model: {
+                            uri: layer.url || layer.blobUrl,
+                            minimumPixelSize: 128,
+                            maximumScale: 20000,
+                            scale: layer.scale || 1.0,
+                            heightReference: Cesium.HeightReference.NONE // Using absolute position now
+                        },
+                        properties: new Cesium.PropertyBag({
+                            layerId: layer.id,
+                            type: 'glb'
+                        })
+                    });
+                    modelRefs.current.set(layer.id, entity);
+                } catch (e) {
+                    console.error('[useLayers] GLB load error:', e);
+                }
+            } else {
+                // Update position & properties
+                entity.position = new Cesium.ConstantPositionProperty(finalPos);
+                entity.orientation = new Cesium.ConstantProperty(orientation);
+                if (entity.model) {
+                    entity.model.scale = new Cesium.ConstantProperty(layer.scale || 1.0);
+                }
+            }
+
+            if (entity) {
+                entity.show = layer.visible;
+            }
+        });
+    }, [viewer, layers]);
 
     // Handle fly-to
     useEffect(() => {
@@ -271,6 +385,8 @@ export function useLayers({ viewer, layers, flyToLayerId, onFlyToComplete, onTil
             return;
         } else if (tileset) {
             flyTarget = tileset;
+        } else if (modelRefs.current.has(flyToLayerId)) {
+            flyTarget = modelRefs.current.get(flyToLayerId);
         } else {
             // Check for Annotation (Measurement) Layers in direct entities
             const annotationEntities = viewer.entities.values.filter(e =>
@@ -285,10 +401,14 @@ export function useLayers({ viewer, layers, flyToLayerId, onFlyToComplete, onTil
         if (flyTarget) {
             if (isMobile && tileset) {
                 viewer.zoomTo(flyTarget);
+            } else if (flyTarget instanceof Cesium.Entity) {
+                viewer.flyTo(flyTarget, {
+                    duration: 1.5,
+                    offset: new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-45), 200)
+                });
             } else {
                 viewer.flyTo(flyTarget, { duration: 1.5 });
             }
-            // Handshake: Notify that fly-to is executed so parent can clear the ID
             onFlyToComplete?.();
         }
     }, [flyToLayerId, viewer, isMobile, onFlyToComplete]);

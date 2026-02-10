@@ -1,5 +1,5 @@
 import { Ruler, Square, ArrowUp, TrendingUp, Eye, Hexagon, Activity, Box } from 'lucide-react';
-import { MeasurementMode } from '../../types';
+import { MeasurementMode, PerformanceMode } from '../../types';
 import { ToolbarItem } from '../ui/ToolbarItem';
 
 interface Props {
@@ -7,9 +7,10 @@ interface Props {
     onSetMode: (mode: MeasurementMode) => void;
     isOpen: boolean;
     onToggle: () => void;
+    performanceMode?: PerformanceMode;
 }
 
-export const MeasurementTool: React.FC<Props> = ({ activeMode, onSetMode, isOpen, onToggle }) => {
+export const MeasurementTool: React.FC<Props> = ({ activeMode, onSetMode, isOpen, onToggle, performanceMode }) => {
 
     const tools = [
         { mode: MeasurementMode.DISTANCE, label: 'Mesafe', icon: <Ruler size={18} />, category: 'Temel', color: '#FBBF24' },
@@ -29,6 +30,7 @@ export const MeasurementTool: React.FC<Props> = ({ activeMode, onSetMode, isOpen
             isOpen={isOpen}
             onToggle={onToggle}
             isActive={activeMode !== MeasurementMode.NONE}
+            performanceMode={performanceMode}
         >
             <div className="space-y-4">
                 {['Temel', 'Analiz'].map(category => (

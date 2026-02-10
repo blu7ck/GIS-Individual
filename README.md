@@ -138,7 +138,7 @@ Refer to [backend/pointcloud-converter/SETUP.md](backend/pointcloud-converter/SE
 ## 🚢 License
 
 Proprietary software developed by **FixureLabs**.  
-Contact: [contact@fixurelabs.com](mailto:contact@fixurelabs.com)
+Contact: [contact@fixurelabs.com](mailto:furkan@fixurelabs.dev)
 
 <p align="center">
   <strong>POWERED BY FIXURELABS</strong>

@@ -1,5 +1,52 @@
 import React, { useState, useEffect } from 'react';
-import { Folder, FileBox, Plus, Upload, ChevronRight, ChevronDown, Eye, EyeOff, Share2, Map, Trash2, Box, Edit2, Check, X as XIcon, SlidersHorizontal, RefreshCw, Save, AlertTriangle, Download, ExternalLink, Loader2 } from 'lucide-react';
+import { Folder, FileBox, Plus, Minus, Upload, ChevronRight, Eye, EyeOff, Share2, Map, Trash2, Box, Edit2, Check, X as XIcon, SlidersHorizontal, Save, AlertTriangle, Download, ExternalLink, Loader2, MousePointer2, RotateCcw } from 'lucide-react';
+
+/**
+ * Modern Number Input with +/- controls for better UX on both desktop and touch.
+ */
+const ModernNumberInput: React.FC<{
+    value: number;
+    step: number;
+    min?: number;
+    max?: number;
+    onChange: (val: number) => void;
+}> = ({ value, step, min, max, onChange }) => {
+    const adjust = (delta: number) => {
+        let newVal = parseFloat((value + delta).toFixed(2));
+        if (min !== undefined && newVal < min) newVal = min;
+        if (max !== undefined && newVal > max) newVal = max;
+        onChange(newVal);
+    };
+
+    return (
+        <div className="flex items-center h-7 bg-black/40 border border-white/10 rounded-lg overflow-hidden group focus-within:border-carta-gold-500/50 transition-all">
+            <button
+                type="button"
+                onClick={() => adjust(-step)}
+                className="h-full px-3 md:px-2 text-gray-500 hover:text-white hover:bg-white/5 transition-colors border-r border-white/5"
+            >
+                <Minus size={10} />
+            </button>
+            <input
+                type="number"
+                value={value}
+                step={step}
+                onChange={(e) => {
+                    const v = parseFloat(e.target.value);
+                    if (!isNaN(v)) onChange(v);
+                }}
+                className="w-14 bg-transparent text-[10px] text-carta-gold-500 text-center font-mono focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            />
+            <button
+                type="button"
+                onClick={() => adjust(step)}
+                className="h-full px-3 md:px-2 text-gray-500 hover:text-white hover:bg-white/5 transition-colors border-l border-white/5"
+            >
+                <Plus size={10} />
+            </button>
+        </div>
+    );
+};
 import { Project, AssetLayer, LayerType, StorageConfig, AssetStatus } from '../../types';
 import { Button } from '../common/Button';
 import { StorageBar } from './StorageBar';
@@ -19,9 +66,13 @@ interface Props {
     onLayerClick?: (layerId: string) => void;
     onOpenModelViewer?: (layer: AssetLayer) => void;
     onUpdateMeasurement?: (id: string, newName: string) => void;
-    onUpdateAsset?: (id: string, newName: string, updates?: { heightOffset?: number; scale?: number }) => void;
+    onUpdateAsset?: (id: string, newName: string, updates?: { heightOffset?: number; scale?: number; offsetX?: number; offsetY?: number; rotation?: number; position?: { lat: number; lng: number; height: number } }) => void;
     onOpenUpload?: (projectId: string) => void;
     onCancelUpload?: () => void;
+    positioningLayerId?: string | null;
+    setPositioningLayerId?: (id: string | null) => void;
+    isPlacingOnMap?: string | null;
+    setIsPlacingOnMap?: (id: string | null) => void;
     isUploading?: boolean;
     uploadProgress?: string;
     uploadProgressPercent?: number;
@@ -46,19 +97,64 @@ export const ProjectPanel: React.FC<Props> = ({
     onToggleAllLayers,
     onDeleteLayer,
     onShareProject,
-    // onShareLayer, // Kept for interface compatibility but unused in this version
     onLayerClick,
+    // onShareLayer, // Kept for interface compatibility but unused in this version
     onOpenModelViewer,
     onUpdateMeasurement,
     onUpdateAsset,
     onOpenUpload,
     onCancelUpload,
+    positioningLayerId,
+    setPositioningLayerId,
+    isPlacingOnMap,
+    setIsPlacingOnMap,
     isUploading,
     uploadProgress,
     uploadProgressPercent,
     externalCreateTrigger,
     storageConfig
 }) => {
+    // Stable random color generator for project folders
+    const getProjectColor = (id: string) => {
+        const colors = [
+            '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8',
+            '#F06292', '#AED581', '#FFD54F', '#4DB6AC', '#7986CB'
+        ];
+        let hash = 0;
+        for (let i = 0; i < id.length; i++) {
+            hash = id.charCodeAt(i) + ((hash << 5) - hash);
+        }
+        return colors[Math.abs(hash % colors.length)];
+    };
+
+    const getMeasurementColor = (mode?: string) => {
+        const mapping: Record<string, string> = {
+            'DISTANCE': '#FBBF24',
+            'AREA': '#F97316',
+            'SPOT_HEIGHT': '#D946EF',
+            'SLOPE': '#84CC16',
+            'LINE_OF_SIGHT': '#06B6D4',
+            'CONVEX_HULL': '#A855F7',
+            'PROFILE': '#3B82F6',
+            'VOLUME': '#D97706'
+        };
+        return mapping[mode || ''] || '#3B82F6';
+    };
+
+    const getLayerTypeColor = (type: LayerType) => {
+        switch (type) {
+            case LayerType.KML: return '#FB923C'; // orange-400
+            case LayerType.DXF: return '#F472B6'; // pink-400
+            case LayerType.SHP: return '#22D3EE'; // cyan-400
+            case LayerType.TILES_3D: return '#2DD4BF'; // teal-400
+            case LayerType.POTREE: return '#818CF8'; // indigo-400
+            case LayerType.LAS: return '#FB7185'; // rose-400
+            case LayerType.GLB_UNCOORD: return '#C084FC'; // purple-400
+            case LayerType.ANNOTATION: return '#3B82F6'; // default blue
+            default: return '#9CA3AF'; // gray-400
+        }
+    };
+
     const [newProjectName, setNewProjectName] = useState('');
     const [isCreating, setIsCreating] = useState(false);
     const [editingMeasurementId, setEditingMeasurementId] = useState<string | null>(null);
@@ -67,6 +163,8 @@ export const ProjectPanel: React.FC<Props> = ({
     const [expandedHeightControlId, setExpandedHeightControlId] = useState<string | null>(null);
     const [expandedInfoId, setExpandedInfoId] = useState<string | null>(null);
     const [localHeights, setLocalHeights] = useState<Record<string, number>>({});
+    const [localTransforms, setLocalTransforms] = useState<Record<string, { height?: number; scale?: number; offsetX?: number; offsetY?: number; rotation?: number }>>({});
+    const [previousPositions, setPreviousPositions] = useState<Record<string, { lat: number; lng: number; height: number }>>({});
 
     // Delete Confirmation State
     const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState | null>(null);
@@ -160,26 +258,95 @@ export const ProjectPanel: React.FC<Props> = ({
         setEditingName('');
     };
 
-    const handleHeightChange = (asset: AssetLayer, newHeight: number) => {
-        setLocalHeights(prev => ({ ...prev, [asset.id]: newHeight }));
 
-        // Real-time transform for the viewer
+    const handleStartPlacement = (asset: AssetLayer) => {
+        if (asset.position) {
+            setPreviousPositions(prev => ({ ...prev, [asset.id]: { ...asset.position! } }));
+        }
+        if (setIsPlacingOnMap) setIsPlacingOnMap(asset.id);
+    };
+
+    const handleResetPosition = (asset: AssetLayer) => {
+        const prev = previousPositions[asset.id];
+        if (prev && onUpdateAsset) {
+            onUpdateAsset(asset.id, asset.name, { position: prev });
+        }
+    };
+
+    const handleRemovePosition = (asset: AssetLayer) => {
+        if (onUpdateAsset) {
+            onUpdateAsset(asset.id, asset.name, {
+                position: null,
+                heightOffset: 0,
+                offsetX: 0,
+                offsetY: 0,
+                rotation: 0,
+                scale: 1.0
+            } as any);
+            if (setPositioningLayerId) setPositioningLayerId(null);
+            if (setIsPlacingOnMap) setIsPlacingOnMap(null);
+        }
+    };
+
+    const handleHeightChange = (asset: AssetLayer, height: number) => {
+        setLocalHeights(prev => ({ ...prev, [asset.id]: height }));
+        // For real-time 3D Tiles preview (via window hack)
         const win = window as any;
         if (win.__fixurelabsApplyTransform) {
-            win.__fixurelabsApplyTransform(asset.id, newHeight, asset.scale ?? 1);
+            win.__fixurelabsApplyTransform(asset.id, { height, scale: asset.scale || 1.0 });
         }
     };
 
     const handleHeightSave = (asset: AssetLayer) => {
-        const newHeight = localHeights[asset.id] ?? asset.heightOffset ?? 0;
+        const height = localHeights[asset.id] ?? asset.heightOffset ?? 0;
         if (onUpdateAsset) {
-            onUpdateAsset(asset.id, asset.name, { heightOffset: newHeight });
+            onUpdateAsset(asset.id, asset.name, { heightOffset: height });
         }
-        setExpandedHeightControlId(null);
     };
 
     const handleHeightReset = (asset: AssetLayer) => {
         handleHeightChange(asset, 0);
+    };
+
+    const handleTransformChange = (asset: AssetLayer, field: string, value: number) => {
+        if (isNaN(value)) return;
+
+        const currentTransform = localTransforms[asset.id] || {
+            height: asset.heightOffset || 0,
+            scale: asset.scale || 1.0,
+            offsetX: asset.offsetX || 0,
+            offsetY: asset.offsetY || 0,
+            rotation: asset.rotation || 0
+        };
+
+        const newTransform = { ...currentTransform, [field]: value };
+        setLocalTransforms(prev => ({ ...prev, [asset.id]: newTransform }));
+
+        // Real-time viewer update
+        const win = window as any;
+        if (win.__fixurelabsApplyTransform) {
+            win.__fixurelabsApplyTransform(asset.id, newTransform);
+        }
+    };
+
+    const handleSaveTransform = (asset: AssetLayer) => {
+        const transform = localTransforms[asset.id];
+        if (onUpdateAsset && transform) {
+            onUpdateAsset(asset.id, asset.name, {
+                heightOffset: transform.height,
+                scale: transform.scale,
+                offsetX: transform.offsetX,
+                offsetY: transform.offsetY,
+                rotation: transform.rotation
+            });
+            // Clear local states & exit mode
+            setLocalTransforms(prev => {
+                const next = { ...prev };
+                delete next[asset.id];
+                return next;
+            });
+            if (setPositioningLayerId) setPositioningLayerId(null);
+        }
     };
 
     const handleFocus = (assetId: string) => {
@@ -268,14 +435,41 @@ export const ProjectPanel: React.FC<Props> = ({
     };
 
     // Helper to render an asset item (to reduce duplication)
-    const renderAssetItem = (asset: AssetLayer, icon: React.ReactNode, typeColorClass: string) => {
+    const renderAssetItem = (asset: AssetLayer, customColor?: string) => {
         const isEditing = editingMeasurementId === asset.id;
 
+        let icon: React.ReactNode;
+
+        const lColor = getLayerTypeColor(asset.type);
+
+        if (asset.type === LayerType.TILES_3D) {
+            icon = <Map />;
+        } else if (asset.type === LayerType.ANNOTATION) {
+            const mode = (asset as any).data?.mode || 'DISTANCE';
+            const mColor = getMeasurementColor(mode);
+            icon = <SlidersHorizontal />;
+            customColor = customColor || mColor;
+        } else if (asset.type === LayerType.POTREE || asset.type === LayerType.LAS) {
+            icon = <FileBox />;
+        } else {
+            icon = <Box />;
+        }
+
+        // Apply type color if no custom color is provided
+        if (!customColor) {
+            customColor = lColor;
+        }
+
         return (
-            <div key={asset.id} className="flex flex-col">
-                <div className="group flex items-center justify-between p-1.5 rounded hover:bg-[#57544F]/20 transition">
-                    <div className="flex items-center overflow-hidden flex-1">
-                        <div className={`${typeColorClass} mr-2 flex-shrink-0`}>{icon}</div>
+            <div key={asset.id} className="flex flex-col group/asset">
+                <div className="flex items-center justify-between p-3 md:p-2 rounded-xl border border-transparent hover:border-white/10 hover:bg-white/[0.04] transition-all duration-300">
+                    <div className="flex items-center overflow-hidden flex-1 min-w-0">
+                        <div
+                            className="p-1.5 rounded-lg mr-3 flex-shrink-0 transition-colors"
+                            style={customColor ? { color: customColor, backgroundColor: `${customColor}15` } : {}}
+                        >
+                            {React.isValidElement(icon) ? React.cloneElement(icon as React.ReactElement<{ size?: number }>, { size: 14 }) : icon}
+                        </div>
 
                         {isEditing ? (
                             <input
@@ -286,122 +480,330 @@ export const ProjectPanel: React.FC<Props> = ({
                                     if (e.key === 'Enter') handleEditSave();
                                     if (e.key === 'Escape') handleEditCancel();
                                 }}
-                                className={`flex-1 bg-[#1C1B19] border border-opacity-50 rounded px-2 py-0.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-opacity-50`}
+                                className="flex-1 bg-black/40 border border-cyan-500/50 rounded-lg px-2.5 py-1 text-xs text-white focus:outline-none ring-1 ring-cyan-500/20"
                                 autoFocus
                                 onClick={(e) => e.stopPropagation()}
                             />
                         ) : (
-                            <span
-                                className={`text-xs truncate flex-1 cursor-pointer transition-colors ${asset.visible ? 'text-gray-300 hover:text-white' : 'text-gray-500'}`}
-                                title={asset.name}
+                            <div
+                                className="flex flex-col min-w-0 cursor-pointer"
                                 onClick={() => handleFocus(asset.id)}
                             >
-                                {getDisplayName(asset)}
-                                {asset.status === AssetStatus.ERROR && (
-                                    <span title={asset.error_message || 'Processing failed'} className="ml-1.5 flex-shrink-0">
-                                        <AlertTriangle size={10} className="text-red-500" />
+                                <span
+                                    className={`text-[11px] font-bold truncate transition-colors ${asset.visible ? '' : 'text-gray-500 opacity-50'}`}
+                                    style={asset.visible ? { color: customColor } : {}}
+                                    title={asset.name}
+                                >
+                                    {getDisplayName(asset)}
+                                </span>
+                                {asset.status === AssetStatus.READY && asset.type === LayerType.TILES_3D && (
+                                    <span className="text-[9px] text-gray-600 font-mono tracking-tighter">
+                                        SSE: 16 | {asset.heightOffset ? `${asset.heightOffset}m` : '0m'}
                                     </span>
                                 )}
-                            </span>
+                                {asset.status === AssetStatus.ERROR && (
+                                    <span className="flex items-center gap-1 text-[9px] text-red-500 font-medium">
+                                        <AlertTriangle size={8} />
+                                        {asset.error_message || 'İşlem Hatası'}
+                                    </span>
+                                )}
+                            </div>
                         )}
                     </div>
 
-                    <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity space-x-1">
+                    <div className="flex items-center gap-1 ml-2">
                         {isEditing ? (
-                            <>
-                                <button onClick={handleEditSave} className="text-carta-mist-500 hover:text-green-400" title="Save">
+                            <div className="flex items-center bg-black/40 rounded-lg border border-white/5 p-0.5">
+                                <button onClick={handleEditSave} className="p-1 px-1.5 text-green-500 hover:text-green-400 hover:bg-white/5 rounded-md transition-all" title="Kaydet">
                                     <Check size={12} />
                                 </button>
-                                <button onClick={handleEditCancel} className="text-carta-mist-500 hover:text-red-400" title="Cancel">
+                                <button onClick={handleEditCancel} className="p-1 px-1.5 text-gray-500 hover:text-white hover:bg-white/5 rounded-md transition-all" title="İptal">
                                     <XIcon size={12} />
                                 </button>
-                            </>
+                            </div>
                         ) : (
-                            <>
+                            <div className={`flex items-center transition-all ${asset.visible ? 'opacity-100' : 'opacity-40 group-hover/asset:opacity-100'}`}>
                                 <button
                                     onClick={() => onToggleLayer(asset.id)}
-                                    className={`text-carta-mist-500 hover:text-white ${asset.status === AssetStatus.PROCESSING ? 'opacity-30 cursor-not-allowed' : ''}`}
-                                    title={asset.status === AssetStatus.PROCESSING ? 'Processing...' : 'Toggle Visibility'}
+                                    className={`p-1.5 rounded-lg transition-all ${asset.visible ? 'text-white bg-white/10 hover:bg-white/20' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}
+                                    title={asset.visible ? 'Gizle' : 'Göster'}
                                     disabled={asset.status === AssetStatus.PROCESSING}
                                 >
                                     {asset.visible ? <Eye size={12} /> : <EyeOff size={12} />}
                                 </button>
-                                {asset.type === LayerType.TILES_3D && (
+
+                                <div className="hidden group-hover/asset:flex items-center ml-1 bg-black/40 rounded-lg border border-white/5 p-0.5 animate-in fade-in slide-in-from-right-2 duration-200">
+                                    {asset.type === LayerType.TILES_3D && (
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setExpandedHeightControlId(expandedHeightControlId === asset.id ? null : asset.id);
+                                                setExpandedInfoId(null);
+                                            }}
+                                            className={`p-1.5 rounded-md transition-all ${expandedHeightControlId === asset.id ? 'bg-emerald-500/20 text-emerald-400' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+                                            title="Yükseklik Ayarı"
+                                        >
+                                            <SlidersHorizontal size={12} />
+                                        </button>
+                                    )}
+                                    {/* ... more buttons ... */}
                                     <button
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            setExpandedHeightControlId(expandedHeightControlId === asset.id ? null : asset.id);
-                                            setExpandedInfoId(null);
-                                        }}
-                                        className={`text-carta-mist-500 hover:text-engineering-primary ${expandedHeightControlId === asset.id ? 'text-engineering-primary' : ''}`}
-                                        title="Adjust Height"
+                                        onClick={(e) => { e.stopPropagation(); handleDownload(asset); }}
+                                        className="p-1.5 rounded-md text-gray-400 hover:text-white hover:bg-white/5 transition-all"
+                                        title="İndir"
                                     >
-                                        <SlidersHorizontal size={12} />
+                                        <Download size={12} />
                                     </button>
-                                )}
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleDownload(asset);
-                                    }}
-                                    className="text-carta-mist-500 hover:text-white"
-                                    title="Download Original"
-                                >
-                                    <Download size={12} />
-                                </button>
-                                <button onClick={() => handleEditStart(asset)} className="text-carta-mist-500 hover:text-white" title="Rename">
-                                    <Edit2 size={12} />
-                                </button>
-                                <button
-                                    onClick={() => requestDeleteLayer(asset.id, asset.name)}
-                                    className="text-carta-mist-500 hover:text-carta-accent-red"
-                                    title="Delete"
-                                >
-                                    <Trash2 size={12} />
-                                </button>
-                            </>
+                                    <button
+                                        onClick={() => handleEditStart(asset)}
+                                        className="p-1.5 rounded-md text-gray-400 hover:text-white hover:bg-white/5 transition-all"
+                                        title="Yeniden Adlandır"
+                                    >
+                                        <Edit2 size={12} />
+                                    </button>
+                                    <button
+                                        onClick={() => requestDeleteLayer(asset.id, asset.name)}
+                                        className="p-1.5 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-500/10 transition-all"
+                                        title="Sil"
+                                    >
+                                        <Trash2 size={12} />
+                                    </button>
+                                    {asset.type === LayerType.GLB_UNCOORD && (
+                                        <>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    if (setPositioningLayerId) {
+                                                        setPositioningLayerId(positioningLayerId === asset.id ? null : asset.id);
+                                                    }
+                                                }}
+                                                className={`p-1.5 rounded-md transition-colors ${positioningLayerId === asset.id ? 'text-emerald-400 bg-white/10' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+                                                title="Modelleme Ayarları"
+                                            >
+                                                <MousePointer2 size={12} />
+                                            </button>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    if (onOpenModelViewer) onOpenModelViewer(asset);
+                                                }}
+                                                className="p-1.5 rounded-md text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
+                                                title="3D Viewer'da Göster"
+                                            >
+                                                <ExternalLink size={12} />
+                                            </button>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
                         )}
                     </div>
                 </div>
 
+                {/* Inline Positioning Control (GLB only) */}
+                {positioningLayerId === asset.id && asset.type === LayerType.GLB_UNCOORD && (
+                    <div className="mt-2 p-3 mx-1 bg-white/[0.03] border border-white/10 rounded-2xl animate-in fade-in zoom-in-95 duration-300 shadow-2xl">
+                        <div className="flex items-center justify-between mb-4">
+                            <h4 className="text-[11px] font-bold text-carta-gold-500 uppercase tracking-wider flex items-center gap-1.5">
+                                <Box size={14} />
+                                Model Ayarları
+                            </h4>
+                            <button
+                                onClick={() => {
+                                    if (setPositioningLayerId) setPositioningLayerId(null);
+                                    if (setIsPlacingOnMap) setIsPlacingOnMap(null);
+                                }}
+                                className="p-1 text-gray-400 hover:text-white transition-colors"
+                            >
+                                <XIcon size={14} />
+                            </button>
+                        </div>
+
+                        {!asset.position && !isPlacingOnMap && (
+                            <div className="space-y-3 py-4 text-center">
+                                <p className="text-[11px] text-gray-400 px-2 italic">
+                                    Model henüz haritaya yerleştirilmedi.
+                                </p>
+                                <Button
+                                    size="sm"
+                                    className="w-full h-10"
+                                    onClick={() => handleStartPlacement(asset)}
+                                >
+                                    <MousePointer2 size={14} className="mr-2" />
+                                    Haritaya Yerleştir
+                                </Button>
+                            </div>
+                        )}
+
+                        {isPlacingOnMap === asset.id && (
+                            <div className="space-y-4 py-4 px-2 bg-carta-gold-500/5 rounded-lg border border-carta-gold-500/20 animate-pulse">
+                                <div className="flex flex-col items-center gap-3">
+                                    <div className="w-8 h-8 rounded-full bg-carta-gold-500/20 flex items-center justify-center">
+                                        <MousePointer2 size={18} className="text-carta-gold-500" />
+                                    </div>
+                                    <p className="text-[12px] text-carta-gold-500 font-medium text-center">
+                                        Harita üzerinde yer seçiniz...
+                                    </p>
+                                </div>
+                                <Button
+                                    size="sm"
+                                    variant="secondary"
+                                    className="w-full h-8 text-[11px]"
+                                    onClick={() => { if (setIsPlacingOnMap) setIsPlacingOnMap(null); }}
+                                >
+                                    İptal
+                                </Button>
+                            </div>
+                        )}
+
+                        {(asset.position && isPlacingOnMap !== asset.id) && (
+                            <div className="space-y-4">
+                                {/* Transformation Controls */}
+                                {['height', 'offsetX', 'offsetY', 'rotation', 'scale'].map((field) => {
+                                    const transform = localTransforms[asset.id] || {
+                                        height: asset.heightOffset || 0,
+                                        scale: asset.scale || 1.0,
+                                        offsetX: asset.offsetX || 0,
+                                        offsetY: asset.offsetY || 0,
+                                        rotation: asset.rotation || 0
+                                    };
+
+                                    const labels: Record<string, string> = {
+                                        height: 'Yükseklik (Z)',
+                                        offsetX: 'Kaydırma (X)',
+                                        offsetY: 'Kaydırma (Y)',
+                                        rotation: 'Döndürme (R)',
+                                        scale: 'Ölçek (S)'
+                                    };
+
+                                    const ranges: Record<string, { min: number, max: number, step: number }> = {
+                                        height: { min: -100, max: 100, step: 0.1 },
+                                        offsetX: { min: -50, max: 50, step: 0.1 },
+                                        offsetY: { min: -50, max: 50, step: 0.1 },
+                                        rotation: { min: 0, max: 360, step: 1 },
+                                        scale: { min: 0.1, max: 10, step: 0.1 }
+                                    };
+
+                                    const val = (transform as any)[field];
+                                    const range = ranges[field]!;
+
+                                    return (
+                                        <div key={field} className="space-y-1.5">
+                                            <div className="flex justify-between items-center">
+                                                <label className="text-[10px] text-gray-400 font-medium">{labels[field]}</label>
+                                                <ModernNumberInput
+                                                    value={val}
+                                                    step={range.step}
+                                                    min={range.min}
+                                                    max={range.max}
+                                                    onChange={v => handleTransformChange(asset, field, v)}
+                                                />
+                                            </div>
+                                            <input
+                                                type="range"
+                                                min={range.min}
+                                                max={range.max}
+                                                step={range.step}
+                                                value={val}
+                                                onChange={e => handleTransformChange(asset, field, parseFloat(e.target.value))}
+                                                className="w-full accent-carta-gold-500 h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer"
+                                            />
+                                        </div>
+                                    );
+                                })}
+
+                                <div className="pt-2 flex flex-col gap-2">
+                                    <div className="flex gap-2">
+                                        <Button
+                                            size="sm"
+                                            variant="primary"
+                                            className="flex-1 h-9 font-bold"
+                                            onClick={() => handleSaveTransform(asset)}
+                                        >
+                                            <Save size={14} className="mr-1.5" />
+                                            Kaydet
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            variant="secondary"
+                                            className={`h-9 w-9 p-0 flex items-center justify-center border-white/10 transition-all ${isPlacingOnMap === asset.id ? 'bg-carta-gold-500 text-white' : ''}`}
+                                            onClick={() => handleStartPlacement(asset)}
+                                            title="Yeniden Konumlandır"
+                                        >
+                                            <MousePointer2 size={14} />
+                                        </Button>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        {previousPositions[asset.id] && (
+                                            <Button
+                                                size="sm"
+                                                variant="secondary"
+                                                className="flex-1 h-8 text-[10px] bg-white/5 hover:bg-white/10 text-gray-400 border-white/10"
+                                                onClick={() => handleResetPosition(asset)}
+                                            >
+                                                <RotateCcw size={12} className="mr-1.5" />
+                                                Önceki Konum
+                                            </Button>
+                                        )}
+                                        <Button
+                                            size="sm"
+                                            variant="danger"
+                                            className="flex-1 h-8 text-[10px]"
+                                            onClick={() => handleRemovePosition(asset)}
+                                        >
+                                            <Trash2 size={12} className="mr-1.5" />
+                                            Haritadan Kaldır
+                                        </Button>
+                                    </div>
+                                    <p className="text-[9px] text-gray-500 text-center italic">
+                                        Kayıt butonuna basana kadar değişiklikler kalıcı olmaz.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {/* Inline Height Control (Only for 3D Tiles) */}
                 {
                     expandedHeightControlId === asset.id && asset.type === LayerType.TILES_3D && (
-                        <div className="mt-2 p-2 bg-engineering-panel/50 border border-engineering-border/50 rounded-lg animate-in slide-in-from-top-1">
-                            <div className="flex items-center justify-between mb-2">
-                                <span className="text-[10px] font-medium text-engineering-primary uppercase tracking-wider">Adjustment (m)</span>
+                        <div className="mt-2 p-3 bg-[#0f0f0f] border border-white/10 rounded-2xl animate-in fade-in zoom-in-95 duration-200 shadow-2xl">
+                            <div className="flex items-center justify-between mb-3">
+                                <span className="text-[10px] font-bold text-carta-gold-500 uppercase tracking-widest flex items-center gap-1.5">
+                                    <SlidersHorizontal size={12} />
+                                    Yükseklik Ayarı (m)
+                                </span>
                                 <div className="flex items-center gap-1">
                                     <button
                                         onClick={() => handleHeightReset(asset)}
-                                        className="p-1 text-gray-500 hover:text-white transition-colors"
-                                        title="Reset"
+                                        className="p-1 text-gray-400 hover:text-white transition-colors"
+                                        title="Sıfırla"
                                     >
-                                        <RefreshCw size={10} />
+                                        <RotateCcw size={14} />
                                     </button>
                                     <button
                                         onClick={() => handleHeightSave(asset)}
-                                        className="p-1 text-engineering-primary hover:text-engineering-primary/80 transition-colors"
-                                        title="Save"
+                                        className="p-1 text-carta-gold-500 hover:text-carta-gold-400 transition-colors"
+                                        title="Kaydet"
                                     >
-                                        <Save size={12} />
+                                        <Save size={14} />
                                     </button>
                                 </div>
                             </div>
                             <div className="flex items-center gap-2">
                                 <input
                                     type="range"
-                                    min="-500"
-                                    max="500"
-                                    step="1"
+                                    min="-1000"
+                                    max="1000"
+                                    step="0.1"
                                     value={localHeights[asset.id] ?? asset.heightOffset ?? 0}
                                     onChange={(e) => handleHeightChange(asset, parseFloat(e.target.value))}
-                                    className="flex-1 h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-engineering-primary"
+                                    className="flex-1 h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-carta-gold-500"
                                 />
-                                <input
-                                    type="number"
+                                <ModernNumberInput
                                     value={localHeights[asset.id] ?? asset.heightOffset ?? 0}
-                                    onChange={(e) => handleHeightChange(asset, parseFloat(e.target.value))}
-                                    className="w-12 bg-black/20 border border-engineering-border rounded px-1 py-0.5 text-[10px] text-white text-right focus:border-engineering-primary outline-none"
+                                    step={1}
+                                    onChange={(v) => handleHeightChange(asset, v)}
                                 />
                             </div>
                         </div>
@@ -411,23 +813,23 @@ export const ProjectPanel: React.FC<Props> = ({
                 {/* Inline Info Panel */}
                 {
                     expandedInfoId === asset.id && (
-                        <div className="mt-1 mb-2 mx-1 p-3 bg-engineering-panel/50 border border-engineering-border/50 rounded-lg animate-in slide-in-from-top-1 text-[10px]">
+                        <div className="mt-1 mb-2 mx-1 p-3 bg-carta-deep-800 border border-carta-gold-500/20 rounded-xl animate-in fade-in zoom-in-95 duration-200 text-[10px]">
                             <div className="space-y-2">
-                                <div className="flex justify-between border-b border-engineering-border/30 pb-1">
-                                    <span className="text-gray-500 uppercase">Type</span>
-                                    <span className="text-engineering-primary font-mono">{asset.type}</span>
+                                <div className="flex justify-between border-b border-white/5 pb-1">
+                                    <span className="text-gray-500 uppercase font-bold tracking-wider">Tür</span>
+                                    <span className="text-carta-gold-500 font-mono font-bold">{asset.type}</span>
                                 </div>
                                 <div className="flex flex-col gap-1">
-                                    <span className="text-gray-500 uppercase">Storage Path</span>
-                                    <span className="text-[9px] text-gray-400 break-all bg-black/20 p-1 rounded font-mono">{asset.storage_path}</span>
+                                    <span className="text-gray-500 uppercase font-bold tracking-wider">Depolama Yolu</span>
+                                    <span className="text-[9px] text-gray-400 break-all bg-black/40 p-2 rounded-lg font-mono border border-white/5">{asset.storage_path}</span>
                                 </div>
                                 <div className="pt-1">
                                     <button
                                         onClick={() => asset.url && window.open(asset.url, '_blank')}
-                                        className="w-full flex items-center justify-center gap-1 p-1 bg-engineering-primary/10 hover:bg-engineering-primary/20 text-engineering-primary rounded border border-engineering-primary/20 transition-all"
+                                        className="w-full h-8 flex items-center justify-center gap-2 bg-carta-gold-500/10 hover:bg-carta-gold-500/20 text-carta-gold-500 rounded-lg border border-carta-gold-500/20 transition-all font-bold"
                                     >
-                                        <ExternalLink size={10} />
-                                        <span>Open URL</span>
+                                        <ExternalLink size={12} />
+                                        <span>Bağlantıyı Aç</span>
                                     </button>
                                 </div>
                             </div>
@@ -442,46 +844,54 @@ export const ProjectPanel: React.FC<Props> = ({
         <div className="h-full flex flex-col overflow-hidden relative">
             <div className="flex flex-col h-full bg-transparent text-white">
                 {/* Fixed Header */}
-                <div className="p-4 border-b border-engineering-border bg-engineering-panel/50 backdrop-blur-sm flex-shrink-0">
-                    <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                            <Plus size={18} className="text-engineering-primary" />
-                            <h2 className="text-sm font-semibold text-white">Projects</h2>
+                <div className="p-4 border-b border-white/5 bg-black/10 backdrop-blur-xl flex-shrink-0">
+                    <div className="flex items-center justify-between">
+                        <div className="flex flex-col">
+                            <h2 className="text-[15px] font-bold text-white tracking-tight">Projelerim</h2>
+                            <p className="text-[10px] text-gray-400 font-medium uppercase tracking-widest">Çalışma Alanı</p>
                         </div>
                         <Button
                             size="sm"
                             onClick={() => setIsCreating(!isCreating)}
-                            className="bg-engineering-primary/20 hover:bg-engineering-primary/30 text-engineering-primary border-engineering-primary/30 flex items-center gap-1 px-3 py-1 h-8 rounded-lg transition-all"
+                            className="bg-[#06B6D4] hover:bg-[#0891B2] text-white shadow-lg shadow-cyan-500/20 flex items-center gap-2 px-4 h-9 rounded-xl transition-all border-none font-bold text-[12px]"
                         >
-                            <Plus size={14} />
-                            <span>Create</span>
+                            <Plus size={16} />
+                            <span>Yeni Proje</span>
                         </Button>
                     </div>
                 </div>
 
                 {/* Fixed New Project Form */}
                 {isCreating && (
-                    <form onSubmit={handleCreate} className="p-3 border-b border-[#57544F] bg-[#1C1B19]/50 animate-in slide-in-from-top-2">
-                        <input
-                            autoFocus
-                            type="text"
-                            placeholder="Project Name..."
-                            value={newProjectName}
-                            onChange={e => setNewProjectName(e.target.value)}
-                            className="w-full bg-engineering-panel border border-engineering-border rounded p-2 text-sm text-white mb-2 focus:border-engineering-primary outline-none"
-                        />
-                        <div className="flex justify-end space-x-2">
-                            <Button size="sm" variant="ghost" onClick={() => setIsCreating(false)} type="button">Cancel</Button>
-                            <Button size="sm" type="submit" className="bg-engineering-primary hover:bg-engineering-primary/80 text-white border-none">Create</Button>
-                        </div>
-                    </form>
+                    <div className="p-4 border-b border-white/5 bg-white/[0.02] animate-in slide-in-from-top-4 duration-300">
+                        <form onSubmit={handleCreate} className="space-y-3">
+                            <div className="relative">
+                                <Folder className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
+                                <input
+                                    autoFocus
+                                    type="text"
+                                    placeholder="Proje adını giriniz..."
+                                    value={newProjectName}
+                                    onChange={e => setNewProjectName(e.target.value)}
+                                    className="w-full bg-black/20 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 outline-none transition-all"
+                                />
+                            </div>
+                            <div className="flex gap-2">
+                                <Button size="sm" variant="secondary" className="flex-1 h-9 rounded-xl text-[12px] font-bold" onClick={() => setIsCreating(false)} type="button">İptal</Button>
+                                <Button size="sm" type="submit" className="flex-[2] h-9 rounded-xl text-[12px] font-bold shadow-lg shadow-cyan-500/10 bg-cyan-600 hover:bg-cyan-500 border-none">Oluştur</Button>
+                            </div>
+                        </form>
+                    </div>
                 )}
 
                 {/* Project List */}
-                <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
                     {projects.length === 0 && !isCreating && (
-                        <div className="text-center text-carta-mist-500 text-xs mt-10">
-                            No projects yet.<br />Create one to start uploading.
+                        <div className="flex flex-col items-center justify-center h-40 text-center space-y-3 animate-in fade-in duration-700">
+                            <div className="p-4 rounded-full bg-white/5 text-gray-600">
+                                <Folder size={32} />
+                            </div>
+                            <p className="text-gray-500 text-xs font-medium">Henüz proje oluşturulmadı.<br />Başlamak için yeni bir proje oluşturun.</p>
                         </div>
                     )}
 
@@ -490,90 +900,119 @@ export const ProjectPanel: React.FC<Props> = ({
                         .map(project => {
                             const isSelected = selectedProjectId === project.id;
                             const projectAssets = assets.filter(a => a.project_id === project.id && a.type !== LayerType.ANNOTATION);
-                            const measurementsSubProjects = projects.filter(p => p.parent_project_id === project.id && p.is_measurements_folder && !p.linked_asset_id);
+                            const measurementsSubProjects = projects.filter(p =>
+                                p.parent_project_id === project.id &&
+                                p.is_measurements_folder &&
+                                !p.linked_asset_id &&
+                                assets.some(a => a.project_id === p.id)
+                            );
 
                             return (
                                 <div key={project.id} className="rounded-lg overflow-hidden border border-transparent transition-all">
                                     {/* Project Header */}
                                     <div
                                         onClick={() => !project.is_measurements_folder && onSelectProject(isSelected ? null : project.id)}
-                                        className={`flex items-center p-2 cursor-pointer transition-colors rounded-lg mb-1 mx-1 ${isSelected ? 'bg-engineering-primary/10 border border-engineering-primary/30 shadow-sm' : 'hover:bg-engineering-border/20 border border-transparent'}`}
+                                        className={`flex items-center p-3 cursor-pointer transition-all duration-300 rounded-xl mb-2 mx-1 shadow-sm border
+                                            ${isSelected
+                                                ? 'bg-white/[0.05] border-white/20 ring-1 ring-white/5'
+                                                : 'bg-white/[0.02] border-white/5 hover:bg-white/[0.06] hover:border-white/10'
+                                            }
+                                        `}
                                     >
-                                        {isSelected ? <ChevronDown size={16} className="text-engineering-primary mr-2" /> : <ChevronRight size={16} className="text-gray-400 mr-2" />}
-                                        <Folder size={16} className={`mr-2 ${isSelected ? 'text-engineering-primary' : 'text-gray-400'}`} />
-                                        <span className={`text-sm font-medium flex-1 truncate ${isSelected ? 'text-white' : 'text-gray-400'}`}>{project.name}</span>
-                                        {isSelected && !project.is_measurements_folder && (
-                                            <div className="flex items-center gap-1">
-                                                {onToggleAllLayers && projectAssets.length > 0 && (() => {
-                                                    const allVisible = projectAssets.every(a => a.visible);
-                                                    return (
+                                        <div
+                                            className={`p-2 rounded-lg mr-3 transition-colors ${isSelected ? 'bg-white/10 shadow-lg' : 'bg-white/5'}`}
+                                            style={{ color: getProjectColor(project.id) }}
+                                        >
+                                            <Folder size={18} />
+                                        </div>
+
+                                        <div className="flex flex-col flex-1 min-w-0">
+                                            <span className={`text-[13px] font-bold truncate transition-colors ${isSelected ? 'text-white' : 'text-gray-400 group-hover:text-gray-200'}`}>
+                                                {project.name}
+                                            </span>
+                                            <span className="text-[10px] text-gray-600 font-medium">
+                                                {projectAssets.length} Katman | {measurementsSubProjects.length} Ölçüm
+                                            </span>
+                                        </div>
+
+                                        <div className="flex items-center gap-1.5">
+                                            {isSelected && !project.is_measurements_folder ? (
+                                                <div className="flex items-center gap-1 bg-black/40 rounded-lg p-1 border border-white/5 animate-in fade-in zoom-in-95 duration-200">
+                                                    {onToggleAllLayers && projectAssets.length > 0 && (() => {
+                                                        const allVisible = projectAssets.every(a => a.visible);
+                                                        return (
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    onToggleAllLayers(project.id, !allVisible);
+                                                                }}
+                                                                className="p-1.5 rounded-md text-gray-400 hover:text-white hover:bg-white/10 transition"
+                                                                title={allVisible ? "Tümünü Gizle" : "Tümünü Göster"}
+                                                            >
+                                                                {allVisible ? <EyeOff size={14} /> : <Eye size={14} />}
+                                                            </button>
+                                                        );
+                                                    })()}
+                                                    {onShareProject && (
                                                         <button
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
-                                                                onToggleAllLayers(project.id, !allVisible);
+                                                                onShareProject(project);
                                                             }}
-                                                            className="p-1 text-carta-mist-600 hover:text-white transition"
-                                                            title={allVisible ? "Hide All Layers" : "Show All Layers"}
+                                                            className="p-1.5 rounded-md text-gray-400 hover:text-carta-forest-400 hover:bg-white/10 transition"
+                                                            title="Projeyi Paylaş"
                                                         >
-                                                            {allVisible ? <EyeOff size={14} /> : <Eye size={14} />}
+                                                            <Share2 size={14} />
                                                         </button>
-                                                    );
-                                                })()}
-                                                {onShareProject && (
+                                                    )}
+                                                    {onOpenUpload && (
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                onOpenUpload(project.id);
+                                                            }}
+                                                            className="p-1.5 rounded-md text-gray-400 hover:text-engineering-primary hover:bg-white/10 transition"
+                                                            title="Dosya Yükle"
+                                                        >
+                                                            <Upload size={14} />
+                                                        </button>
+                                                    )}
                                                     <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            onShareProject(project);
-                                                        }}
-                                                        className="p-1 text-carta-mist-600 hover:text-carta-forest-400 transition"
-                                                        title="Share Project"
+                                                        onClick={(e) => { e.stopPropagation(); requestDeleteProject(project.id, project.name); }}
+                                                        className="p-1.5 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-500/10 transition"
+                                                        title="Projeyi Sil"
                                                     >
-                                                        <Share2 size={14} />
+                                                        <Trash2 size={14} />
                                                     </button>
-                                                )}
-                                                {onOpenUpload && (
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            onOpenUpload(project.id);
-                                                        }}
-                                                        className="p-1 text-carta-mist-600 hover:text-engineering-primary transition"
-                                                        title="Upload Files"
-                                                    >
-                                                        <Upload size={14} />
-                                                    </button>
-                                                )}
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); requestDeleteProject(project.id, project.name); }}
-                                                    className="p-1 text-carta-mist-600 hover:text-carta-accent-red transition"
-                                                    title="Delete Project"
-                                                >
-                                                    <Trash2 size={14} />
-                                                </button>
-                                            </div>
-                                        )}
+                                                </div>
+                                            ) : (
+                                                <ChevronRight size={16} className={`text-gray-600 transition-transform duration-300 ${isSelected ? 'rotate-90' : ''}`} />
+                                            )}
+                                        </div>
                                     </div>
 
                                     {/* Assets List (Only if project selected) */}
                                     {isSelected && !project.is_measurements_folder && (
-                                        <div className="pl-4 pr-1 py-1 space-y-1 ml-2 border-l border-white/10 my-1">
+                                        <div className="pl-3 pr-1 py-1 space-y-2 ml-4 border-l border-white/5 my-2">
                                             {projectAssets.length === 0 && measurementsSubProjects.length === 0 && (
-                                                <div className="text-[10px] text-carta-mist-600 italic py-1">Empty project. Upload files.</div>
+                                                <div className="text-[10px] text-gray-600 italic py-4 text-center bg-white/[0.02] rounded-xl border border-dashed border-white/5 mx-2">
+                                                    Proje henüz boş. Dosya yükleyerek başlayın.
+                                                </div>
                                             )}
 
                                             {/* Data Category */}
                                             {projectAssets.length > 0 && (
-                                                <div>
+                                                <div className="space-y-1">
                                                     <div
                                                         onClick={() => toggleCategory(project.id, 'data')}
-                                                        className="flex items-center p-1.5 cursor-pointer hover:bg-[#57544F]/20 rounded transition-colors"
+                                                        className="flex items-center p-2 cursor-pointer hover:bg-white/5 rounded-lg transition-colors group/cat"
                                                     >
                                                         <ChevronRight
                                                             size={12}
-                                                            className={`mr-1.5 text-gray-500 transition-transform ${isCategoryExpanded(project.id, 'data') ? 'rotate-90' : ''}`}
+                                                            className={`mr-2 text-gray-600 transition-transform duration-300 ${isCategoryExpanded(project.id, 'data') ? 'rotate-90' : ''}`}
                                                         />
-                                                        <Folder size={12} className="mr-1.5 text-gray-500" />
-                                                        <span className="text-xs font-medium text-gray-400">Data</span>
+                                                        <Folder size={14} className="mr-2 text-gray-500 group-hover/cat:text-gray-300 transition-colors" />
+                                                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest group-hover/cat:text-gray-300 transition-colors">VERİ KATMANLARI</span>
                                                     </div>
                                                     {isCategoryExpanded(project.id, 'data') && (
                                                         <div className="pl-4 space-y-1 mt-1">
@@ -582,7 +1021,7 @@ export const ProjectPanel: React.FC<Props> = ({
                                                                 <div className="mb-1">
                                                                     <div className="text-[10px] text-carta-mist-500 font-medium mb-1 px-1">KML Files</div>
                                                                     {projectAssets.filter(a => a.type === LayerType.KML).map(asset =>
-                                                                        renderAssetItem(asset, <FileBox size={14} />, 'text-[#EA580C]')
+                                                                        renderAssetItem(asset, '#EA580C')
                                                                     )}
                                                                 </div>
                                                             )}
@@ -597,7 +1036,7 @@ export const ProjectPanel: React.FC<Props> = ({
 
                                                                         return (
                                                                             <div key={asset.id}>
-                                                                                {renderAssetItem(asset, <FileBox size={14} />, 'text-carta-forest-400')}
+                                                                                {renderAssetItem(asset, '#2DD4BF')}
 
                                                                                 {/* Measurements for this 3D Tile */}
                                                                                 {tilesetMeasurements && tilesetMeasurementsAssets.length > 0 && (
@@ -667,7 +1106,7 @@ export const ProjectPanel: React.FC<Props> = ({
                                                                 <div className="mb-1">
                                                                     <div className="text-[10px] text-gray-500 font-medium mb-1 px-1">DXF Files</div>
                                                                     {projectAssets.filter(a => a.type === LayerType.DXF).map(asset =>
-                                                                        renderAssetItem(asset, <FileBox size={14} />, 'text-[#EC4899]')
+                                                                        renderAssetItem(asset, '#EC4899')
                                                                     )}
                                                                 </div>
                                                             )}
@@ -677,7 +1116,7 @@ export const ProjectPanel: React.FC<Props> = ({
                                                                 <div className="mb-1">
                                                                     <div className="text-[10px] text-gray-500 font-medium mb-1 px-1">Shapefiles</div>
                                                                     {projectAssets.filter(a => a.type === LayerType.SHP).map(asset =>
-                                                                        renderAssetItem(asset, <FileBox size={14} />, 'text-[#06B6D4]')
+                                                                        renderAssetItem(asset, '#06B6D4')
                                                                     )}
                                                                 </div>
                                                             )}
@@ -687,7 +1126,7 @@ export const ProjectPanel: React.FC<Props> = ({
                                                                 <div className="mb-1">
                                                                     <div className="text-[10px] text-gray-500 font-medium mb-1 px-1">GLB/GLTF</div>
                                                                     {projectAssets.filter(a => a.type === LayerType.GLB_UNCOORD).map(asset =>
-                                                                        renderAssetItem(asset, <Box size={14} />, 'text-[#A855F7]')
+                                                                        renderAssetItem(asset, '#A855F7')
                                                                     )}
                                                                 </div>
                                                             )}
@@ -697,7 +1136,7 @@ export const ProjectPanel: React.FC<Props> = ({
                                                                 <div className="mb-1">
                                                                     <div className="text-[10px] text-gray-500 font-medium mb-1 px-1">Point Clouds</div>
                                                                     {projectAssets.filter(a => a.type === LayerType.POTREE || a.type === LayerType.LAS).map(asset =>
-                                                                        renderAssetItem(asset, <Box size={14} />, 'text-[#0EA5E9]')
+                                                                        renderAssetItem(asset, '#0EA5E9')
                                                                     )}
                                                                 </div>
                                                             )}
@@ -708,26 +1147,34 @@ export const ProjectPanel: React.FC<Props> = ({
 
                                             {/* Level 1 Measurements Category */}
                                             {measurementsSubProjects.length > 0 && (
-                                                <div>
+                                                <div className="space-y-1">
                                                     <div
                                                         onClick={() => toggleCategory(project.id, 'measurements')}
-                                                        className="flex items-center p-1.5 cursor-pointer hover:bg-carta-deep-800/50 rounded transition-colors"
+                                                        className="flex items-center p-2 cursor-pointer hover:bg-white/5 rounded-lg transition-colors group/cat"
                                                     >
                                                         <ChevronRight
                                                             size={12}
-                                                            className={`mr-1.5 text-carta-mist-500 transition-transform ${isCategoryExpanded(project.id, 'measurements') ? 'rotate-90' : ''}`}
+                                                            className={`mr-2 text-gray-600 transition-transform duration-300 ${isCategoryExpanded(project.id, 'measurements') ? 'rotate-90' : ''}`}
                                                         />
-                                                        <Folder size={12} className="mr-1.5 text-carta-mist-500" />
-                                                        <span className="text-xs font-medium text-carta-mist-400">Measurements</span>
+                                                        <Folder size={14} className="mr-2 text-gray-500 group-hover/cat:text-gray-300 transition-colors" />
+                                                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest group-hover/cat:text-gray-300 transition-colors">ÖLÇÜM VE ANALİZLER</span>
                                                     </div>
                                                     {isCategoryExpanded(project.id, 'measurements') && (
                                                         <div className="pl-4 space-y-1 mt-1">
                                                             {measurementsSubProjects.map(measurementProject => {
                                                                 const measurementAssets = assets.filter(a => a.project_id === measurementProject.id);
                                                                 return measurementAssets.map(measurement => (
-                                                                    <div key={measurement.id} className="group flex items-center justify-between p-1.5 rounded hover:bg-carta-deep-800 transition">
-                                                                        <div className="flex items-center overflow-hidden flex-1">
-                                                                            <Map size={14} className="text-carta-gold-500 mr-2 flex-shrink-0" />
+                                                                    <div key={measurement.id} className="group/measurement flex items-center justify-between p-2 rounded-xl border border-transparent hover:border-white/5 hover:bg-white/[0.03] transition-all duration-300">
+                                                                        <div className="flex items-center overflow-hidden flex-1 min-w-0">
+                                                                            <div
+                                                                                className="p-1.5 rounded-lg mr-3 flex-shrink-0 transition-colors"
+                                                                                style={{
+                                                                                    backgroundColor: `${getMeasurementColor((measurement as any).data?.mode)}20`,
+                                                                                    color: getMeasurementColor((measurement as any).data?.mode)
+                                                                                }}
+                                                                            >
+                                                                                <SlidersHorizontal size={14} />
+                                                                            </div>
                                                                             {editingMeasurementId === measurement.id ? (
                                                                                 <input
                                                                                     type="text"
@@ -737,38 +1184,33 @@ export const ProjectPanel: React.FC<Props> = ({
                                                                                         if (e.key === 'Enter') handleEditSave();
                                                                                         if (e.key === 'Escape') handleEditCancel();
                                                                                     }}
-                                                                                    className="flex-1 bg-carta-deep-700 border border-carta-gold-500 rounded px-2 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-carta-gold-500"
+                                                                                    className="flex-1 bg-black/40 border border-carta-gold-500/50 rounded-lg px-2.5 py-1 text-xs text-white focus:outline-none ring-1 ring-carta-gold-500/20"
                                                                                     autoFocus
                                                                                 />
                                                                             ) : (
-                                                                                <span className="text-xs truncate max-w-[120px] text-carta-gold-300" title={measurement.name}>
+                                                                                <span
+                                                                                    className={`text-[11px] font-bold truncate transition-colors cursor-pointer ${measurement.visible ? '' : 'text-gray-500 opacity-50'}`}
+                                                                                    style={measurement.visible ? { color: getMeasurementColor((measurement as any).data?.mode) } : {}}
+                                                                                    title={measurement.name}
+                                                                                    onClick={() => handleFocus(measurement.id)}
+                                                                                >
                                                                                     {measurement.name}
                                                                                 </span>
                                                                             )}
                                                                         </div>
-                                                                        <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity space-x-1">
-                                                                            {editingMeasurementId === measurement.id ? (
-                                                                                <>
-                                                                                    <button onClick={handleEditSave} className="text-carta-mist-500 hover:text-green-400" title="Save">
-                                                                                        <Check size={12} />
-                                                                                    </button>
-                                                                                    <button onClick={handleEditCancel} className="text-carta-mist-500 hover:text-red-400" title="Cancel">
-                                                                                        <XIcon size={12} />
-                                                                                    </button>
-                                                                                </>
-                                                                            ) : (
-                                                                                <>
-                                                                                    <button onClick={() => onToggleLayer(measurement.id)} className="text-carta-mist-500 hover:text-white" title="Toggle Visibility">
-                                                                                        {measurement.visible ? <Eye size={12} /> : <EyeOff size={12} />}
-                                                                                    </button>
-                                                                                    <button onClick={() => handleEditStart(measurement)} className="text-carta-mist-500 hover:text-carta-gold-400" title="Rename">
-                                                                                        <Edit2 size={12} />
-                                                                                    </button>
-                                                                                    <button onClick={() => requestDeleteLayer(measurement.id, measurement.name)} className="text-carta-mist-500 hover:text-carta-accent-red" title="Delete">
-                                                                                        <Trash2 size={12} />
-                                                                                    </button>
-                                                                                </>
-                                                                            )}
+
+                                                                        <div className="flex items-center gap-1 ml-2 opacity-0 group-hover/measurement:opacity-100 transition-opacity">
+                                                                            <div className="flex items-center bg-black/40 rounded-lg border border-white/5 p-0.5">
+                                                                                <button onClick={() => onToggleLayer(measurement.id)} className={`p-1 px-1.5 transition-all ${measurement.visible ? 'text-white hover:text-white' : 'text-gray-500 hover:text-white'}`} title="Göster/Gizle">
+                                                                                    {measurement.visible ? <Eye size={11} /> : <EyeOff size={11} />}
+                                                                                </button>
+                                                                                <button onClick={() => handleEditStart(measurement)} className="p-1 px-1.5 text-gray-500 hover:text-carta-gold-400 transition-all" title="Adlandır">
+                                                                                    <Edit2 size={11} />
+                                                                                </button>
+                                                                                <button onClick={() => requestDeleteLayer(measurement.id, measurement.name)} className="p-1 px-1.5 text-gray-500 hover:text-red-500 transition-all" title="Sil">
+                                                                                    <Trash2 size={11} />
+                                                                                </button>
+                                                                            </div>
                                                                         </div>
                                                                     </div>
                                                                 ));

@@ -1,4 +1,5 @@
 import React, { useRef, useEffect } from 'react';
+import { PerformanceMode } from '../../types';
 
 interface Props {
     icon: React.ReactNode;
@@ -8,6 +9,7 @@ interface Props {
     onToggle: () => void;
     isActive?: boolean;
     className?: string;
+    performanceMode?: PerformanceMode;
 }
 
 export const ToolbarItem: React.FC<Props> = ({
@@ -17,7 +19,8 @@ export const ToolbarItem: React.FC<Props> = ({
     isOpen,
     onToggle,
     isActive,
-    className = ''
+    className = '',
+    performanceMode
 }) => {
     const ref = useRef<HTMLDivElement>(null);
 
@@ -31,24 +34,31 @@ export const ToolbarItem: React.FC<Props> = ({
 
         if (isOpen) {
             document.addEventListener('mousedown', handleClickOutside);
+            document.addEventListener('touchstart', handleClickOutside);
         }
-        return () => document.removeEventListener('mousedown', handleClickOutside);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+            document.removeEventListener('touchstart', handleClickOutside);
+        };
     }, [isOpen, onToggle]);
 
     return (
         <div className={`relative pointer-events-auto ${className}`} ref={ref}>
             {/* Panel (Fixed position to align all panels to the same spot) */}
             {isOpen && (
-                <div className="fixed bottom-[120px] right-4 z-40 bg-white/5 backdrop-blur-3xl border border-white/10 rounded-[32px] shadow-2xl p-4 min-w-[280px] max-w-[90vw] animate-in slide-in-from-bottom-2 origin-bottom-right overflow-hidden">
+                <div className={`
+                    fixed bottom-[120px] right-4 z-40 border border-white/20 rounded-[40px] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.8)] p-6 min-w-[320px] max-w-[90vw] animate-in slide-in-from-bottom-4 origin-bottom-right overflow-hidden
+                    ${performanceMode === PerformanceMode.BATTERY_SAVER ? 'bg-black' : 'bg-[#0a0a0a]/90 backdrop-blur-3xl'}
+                `}>
                     {label && (
-                        <div className="flex justify-between items-center mb-3">
-                            <h3 className="font-bold text-white flex items-center gap-2 text-sm uppercase tracking-tight">
-                                <span className="text-gray-400">{icon}</span>
+                        <div className="flex justify-between items-center mb-5">
+                            <h3 className="font-bold text-white flex items-center gap-3 text-sm uppercase tracking-widest">
+                                <span className="text-orange-500">{icon}</span>
                                 {label}
                             </h3>
                         </div>
                     )}
-                    {/* The children prop is where the MeasurementTool's buttons would be rendered */}
+                    {/* The children prop is where the contents would be rendered */}
                     {children}
                 </div>
             )}
@@ -56,10 +66,10 @@ export const ToolbarItem: React.FC<Props> = ({
             {/* Button */}
             <button
                 onClick={onToggle}
-                className={`w-10 h-10 md:w-12 md:h-12 rounded-full shadow-lg flex items-center justify-center transition-all hover:scale-110 border
+                className={`w-12 h-12 md:w-14 md:h-14 rounded-full shadow-2xl flex items-center justify-center transition-all duration-300 hover:scale-110 border-2
           ${isActive || isOpen
-                        ? 'bg-white/20 text-white border-white/30 shadow-white/10'
-                        : 'bg-black/60 backdrop-blur-xl text-gray-400 border-white/10 hover:text-white hover:border-white/30'
+                        ? 'bg-orange-500 border-white/40 text-white shadow-[0_0_20px_rgba(245,158,11,0.4)]'
+                        : 'bg-black border-white/20 text-gray-400 hover:text-white hover:border-white/40'
                     }
         `}
                 title={label}

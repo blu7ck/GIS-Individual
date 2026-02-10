@@ -101,20 +101,25 @@ export const PotreeViewer: React.FC<PotreeViewerProps> = ({ layer, onClose }) =>
             viewer.setDescription("");
 
             // Potree 1.8: Load Point Cloud
-            window.Potree.loadPointCloud(pointCloudUrl, layer.name, (e: any) => {
-                const pointcloud = e.pointcloud;
-                const material = pointcloud.material;
+            try {
+                window.Potree.loadPointCloud(pointCloudUrl, layer.name, (e: any) => {
+                    const pointcloud = e.pointcloud;
+                    const material = pointcloud.material;
 
-                material.size = 1;
-                material.pointSizeType = window.Potree.PointSizeType.ADAPTIVE;
-                material.shape = window.Potree.PointShape.SQUARE;
+                    material.size = 1;
+                    material.pointSizeType = window.Potree.PointSizeType.ADAPTIVE;
+                    material.shape = window.Potree.PointShape.SQUARE;
 
-                viewer.scene.addPointCloud(pointcloud);
-                viewer.fitToScreen();
+                    viewer.scene.addPointCloud(pointcloud);
+                    viewer.fitToScreen();
 
-                setViewerState('ready');
-                console.log('[PotreeViewer] Point cloud loaded successfully');
-            });
+                    setViewerState('ready');
+                    console.log('[PotreeViewer] Point cloud loaded successfully');
+                });
+            } catch (loadErr) {
+                console.error('[PotreeViewer] Load command failed:', loadErr);
+                setViewerState('error');
+            }
 
         } catch (err) {
             console.error('[PotreeViewer] Error initializing viewer:', err);
@@ -196,7 +201,7 @@ export const PotreeViewer: React.FC<PotreeViewerProps> = ({ layer, onClose }) =>
             <div
                 ref={potreeContainerRef}
                 className="flex-1 relative cursor-crosshair overflow-hidden"
-                style={{ width: '100%', height: '100%' }}
+                style={{ width: '100%', height: '100%', touchAction: 'none' }}
             >
                 {/* 1. Back to Cesium Button - Vertical Center Right */}
                 <div className="absolute top-1/2 right-4 transform -translate-y-1/2 z-[100]">
@@ -216,7 +221,7 @@ export const PotreeViewer: React.FC<PotreeViewerProps> = ({ layer, onClose }) =>
                     <div className="flex items-center gap-3">
                         <div className="flex items-center gap-2 px-2 py-1 bg-blue-500/20 border border-blue-500/30 rounded text-blue-300">
                             <Box size={14} />
-                            <span className="text-xs font-bold uppercase tracking-wider">Potree 1.8</span>
+                            <span className="text-xs font-bold uppercase tracking-wider">FIXURELABS v1.8</span>
                         </div>
                         <div>
                             <h2 className="text-sm font-bold text-white leading-none">{layer.name}</h2>

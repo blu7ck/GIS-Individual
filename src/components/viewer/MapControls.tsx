@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Layers, Map } from 'lucide-react';
-import { MapType, QualitySettings } from '../../types';
+import { MapType, QualitySettings, PerformanceMode } from '../../types';
 import { QualitySettingsPanel } from './QualitySettingsPanel';
 
 interface Props {
@@ -11,6 +11,7 @@ interface Props {
   onQualityChange?: (settings: QualitySettings) => void;
   isOpen: boolean;
   onToggle: () => void;
+  performanceMode?: PerformanceMode;
 }
 
 export const MapControls: React.FC<Props> = ({
@@ -19,7 +20,8 @@ export const MapControls: React.FC<Props> = ({
   qualitySettings,
   onQualityChange,
   isOpen,
-  onToggle
+  onToggle,
+  performanceMode
 }) => {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -44,7 +46,11 @@ export const MapControls: React.FC<Props> = ({
       }
     };
     document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
+    document.addEventListener('touchstart', handleClick);
+    return () => {
+      document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('touchstart', handleClick);
+    };
   }, [isOpen]);
 
   const panelContent = (
@@ -98,8 +104,8 @@ export const MapControls: React.FC<Props> = ({
         onClick={onToggle}
         className={`w-14 h-14 rounded-full flex items-center justify-center transition-all duration-500 shadow-2xl border-2
           ${isOpen
-            ? 'bg-white/20 border-white/30 text-white rotate-90 scale-105 shadow-white/10'
-            : 'bg-black/60 backdrop-blur-xl border-white/10 text-white hover:border-white/30 hover:shadow-white/5 hover:scale-110'
+            ? 'bg-orange-500 border-white/40 text-white rotate-90 scale-105 shadow-[0_0_20px_rgba(245,158,11,0.4)]'
+            : 'bg-black border-white/20 text-white hover:border-white/40 hover:shadow-white/5 hover:scale-110 shadow-2xl'
           }
         `}
       >
@@ -124,10 +130,11 @@ export const MapControls: React.FC<Props> = ({
               bottom: '120px',
               right: '16px'
             }}
-            className={`pointer-events-auto shadow-[0_30px_60px_-15px_rgba(0,0,0,0.5)] border border-white/10 bg-white/5 backdrop-blur-3xl transition-all duration-500
+            className={`pointer-events-auto shadow-[0_30px_90px_-15px_rgba(0,0,0,0.8)] border border-white/20 transition-all duration-500
+              ${performanceMode === PerformanceMode.BATTERY_SAVER ? 'bg-black' : 'bg-black/90 backdrop-blur-3xl'}
               ${isMobile
-                ? 'fixed bottom-0 left-0 right-0 rounded-t-3xl border-t border-white/10 animate-in slide-in-from-bottom-full'
-                : 'w-[400px] rounded-[32px] animate-in slide-in-from-bottom-4 fade-in overflow-hidden'
+                ? 'fixed bottom-0 left-0 right-0 rounded-t-[40px] border-t border-white/20 animate-in slide-in-from-bottom-full'
+                : 'w-[400px] rounded-[40px] animate-in slide-in-from-bottom-4 fade-in overflow-hidden'
               }
             `}
           >

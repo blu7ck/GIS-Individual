@@ -4,6 +4,7 @@ import { UncoordinatedModelViewer } from './UncoordinatedModelViewer';
 import { LocationControl } from './LocationControl';
 import { MapControls } from './MapControls';
 import { useGeolocation } from '../../hooks/useGeolocation';
+import { LayerType } from '../../types';
 
 // Hooks
 import { useSecureAuth } from '../../features/secure-viewer/hooks/useSecureAuth';
@@ -45,11 +46,16 @@ export const SecureViewer: React.FC<Props> = ({ shareId, workerUrl }) => {
     setFlyToLayerId,
     activeTilesetId,
     setActiveTilesetId,
+    positioningLayerId,
+    setPositioningLayerId,
     mapType,
     setMapType,
     sceneMode,
     qualitySettings,
-    toggleLayer
+    toggleLayer,
+    updateLayerPosition,
+    renameLayer,
+    deleteLayer
   } = useSecureViewerState();
 
   // 3. Local Measurements
@@ -81,8 +87,11 @@ export const SecureViewer: React.FC<Props> = ({ shareId, workerUrl }) => {
   }, [handleUnlock, setLayers, setIsAuthenticated]);
 
   const handleLayerClick = (layer: any) => {
-    // Basic implementation - can be expanded
-    if (layer.type === 'glb-uncoord') {
+    // Name click should always fly-to if position exists
+    if (layer.position) {
+      setFlyToLayerId(layer.id);
+    } else if (layer.type === LayerType.GLB_UNCOORD) {
+      // If no position, open viewer as fallback for GLB
       setActiveModelLayer(layer);
     } else {
       setFlyToLayerId(layer.id);
@@ -117,6 +126,13 @@ export const SecureViewer: React.FC<Props> = ({ shareId, workerUrl }) => {
         flyToUserLocation={geolocation.isTracking}
         qualitySettings={qualitySettings}
         onTilesetClick={setActiveTilesetId}
+        paused={!!activeModelLayer} // Pause Cesium when model viewer is active
+        onMapClick={(coords) => {
+          if (positioningLayerId) {
+            updateLayerPosition(positioningLayerId, coords.lat, coords.lng, coords.height);
+            setPositioningLayerId(null); // Exit positioning mode after click
+          }
+        }}
         className="w-full h-full"
       />
 
@@ -127,6 +143,12 @@ export const SecureViewer: React.FC<Props> = ({ shareId, workerUrl }) => {
         panelOpen={projectPanelOpen}
         setPanelOpen={setProjectPanelOpen}
         activeTilesetId={activeTilesetId}
+        positioningLayerId={positioningLayerId}
+        setPositioningLayerId={setPositioningLayerId}
+        onUpdatePosition={updateLayerPosition}
+        onRenameLayer={renameLayer}
+        onDeleteLayer={deleteLayer}
+        onViewInViewer={setActiveModelLayer}
       />
 
       <MapControls

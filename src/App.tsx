@@ -5,7 +5,7 @@ import { ShareModal } from './components/ui/ShareModal';
 import { ShareProjectModal } from './components/ui/ShareProjectModal';
 import { SecureViewer } from './components/viewer/SecureViewer';
 import { NotificationContainer } from './components/common/Notification';
-import { AssetLayer, MeasurementMode, QualitySettings, getDefaultQualitySettings, QualityLevel, MapType, SceneViewMode, LayerType, AssetStatus } from './types';
+import { AssetLayer, MeasurementMode, QualitySettings, getDefaultQualitySettings, QualityLevel, PerformanceMode, MapType, SceneViewMode, LayerType, AssetStatus } from './types';
 import * as Cesium from 'cesium';
 import { useGeolocation } from './hooks/useGeolocation';
 import { SaveModal } from './components/ui/SaveModal';
@@ -21,6 +21,7 @@ import { useLayerManager } from './hooks/useLayerManager';
 // New Components
 import { EngineeringLayout } from './components/layout/EngineeringLayout';
 import { PotreeViewer } from './features/viewer/components/PotreeViewer';
+import { UncoordinatedModelViewer } from './components/viewer/UncoordinatedModelViewer';
 
 // Global Cesium Def
 if (typeof window !== 'undefined') {
@@ -41,6 +42,10 @@ const App: React.FC = () => {
     setShowSettings,
     activeModelLayer: _activeModelLayer,
     setActiveModelLayer: _setActiveModelLayer,
+    positioningLayerId,
+    setPositioningLayerId,
+    isPlacingOnMap,
+    setIsPlacingOnMap,
     notifications,
     notify,
     dismissNotification
@@ -115,7 +120,7 @@ const App: React.FC = () => {
     setFlyToLayerId,
     handleToggleLayer,
     handleDeleteLayer
-  } = useLayerManager(assets, projects, setAssets, storageConfig, notify, _setActiveModelLayer, setActivePotreeLayer, setStorageRefreshKey);
+  } = useLayerManager(assets, projects, setAssets, storageConfig, notify, setActivePotreeLayer, setStorageRefreshKey);
 
   // 6. Map State
   const [mapType, setMapType] = useState<MapType>(MapType.STANDARD);
@@ -172,10 +177,8 @@ const App: React.FC = () => {
         user.id,
         customName,
         pendingMeasurement.text,
-        {
-          ...pendingMeasurement.geometry,
-          mode: pendingMeasurement.mode // Store mode inside geometry
-        },
+        pendingMeasurement.geometry,
+        pendingMeasurement.mode,
         storageConfig
       );
 
@@ -197,16 +200,12 @@ const App: React.FC = () => {
   // Quality Settings
   const [qualitySettings, setQualitySettings] = useState<QualitySettings>(() => {
     const isAndroid = typeof window !== 'undefined' && /Android/i.test(navigator.userAgent);
-    const isMobile = typeof window !== 'undefined' && (
-      /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
-      ('ontouchstart' in window) || (navigator.maxTouchPoints > 0)
-    );
 
     if (isAndroid) {
       return {
-        ...getDefaultQualitySettings(true),
+        ...getDefaultQualitySettings(),
         qualityLevel: QualityLevel.MEDIUM,
-        maximumScreenSpaceError: 4,
+        performanceMode: PerformanceMode.BALANCED,
         tileCacheSize: 250,
         textureCacheSize: 64,
         cacheBytes: 64 * 1024 * 1024,
@@ -214,8 +213,17 @@ const App: React.FC = () => {
         baseScreenSpaceError: 2048,
       };
     }
-    return getDefaultQualitySettings(isMobile);
+    return getDefaultQualitySettings();
   });
+
+  // Apply battery saver effects to UI
+  useEffect(() => {
+    if (qualitySettings.performanceMode === PerformanceMode.BATTERY_SAVER) {
+      document.documentElement.classList.add('battery-saver-mode');
+    } else {
+      document.documentElement.classList.remove('battery-saver-mode');
+    }
+  }, [qualitySettings.performanceMode]);
 
   // Geolocation
   const geolocation = useGeolocation();
@@ -255,9 +263,9 @@ const App: React.FC = () => {
     };
   }, [setAssets]);
 
-  // Update asset handler (rename, height offset, scale)
+  // Update asset handler (rename, height offset, scale, position)
   const handleUpdateAsset = useMemo(() => {
-    return (id: string, newName: string, updates?: { heightOffset?: number; scale?: number }) => {
+    return (id: string, newName: string, updates?: { heightOffset?: number; scale?: number; offsetX?: number; offsetY?: number; rotation?: number; position?: { lat: number; lng: number; height: number } }) => {
       // 1. Local Update
       setAssets(prev => prev.map(a => a.id === id ? { ...a, name: newName, ...updates } : a));
 
@@ -278,12 +286,11 @@ const App: React.FC = () => {
   // Open viewer handler (for GLB/Potree)
   const handleOpenViewer = useCallback((asset: AssetLayer) => {
     if (asset.type === LayerType.GLB_UNCOORD) {
-      // TODO: Open model viewer
-      console.log('Open GLB viewer for:', asset.name);
+      _setActiveModelLayer(asset);
     } else if (asset.type === LayerType.POTREE || asset.type === LayerType.TILES_3D || asset.type === LayerType.LAS) {
       setActivePotreeLayer(asset);
     }
-  }, [setActivePotreeLayer]);
+  }, [_setActiveModelLayer, setActivePotreeLayer]);
 
 
   // Tiles height save handler
@@ -408,6 +415,10 @@ const App: React.FC = () => {
           cameraHeight={cameraHeight}
           onFlyToLocation={() => setFlyToUserLocation(Date.now())}
           viewer={cesiumViewerInstance}
+          positioningLayerId={positioningLayerId}
+          setPositioningLayerId={setPositioningLayerId}
+          isPlacingOnMap={isPlacingOnMap}
+          setIsPlacingOnMap={setIsPlacingOnMap}
         >
           <CesiumViewer
             className="w-full h-full"
@@ -431,6 +442,16 @@ const App: React.FC = () => {
             onMouseMove={handleMouseMove}
             onCameraChange={handleCameraChange}
             onViewerReady={setCesiumViewerInstance}
+            onMapClick={(coords) => {
+              if (isPlacingOnMap) {
+                const asset = assets.find(a => a.id === isPlacingOnMap);
+                if (asset) {
+                  handleUpdateAsset(asset.id, asset.name, { position: coords });
+                  setIsPlacingOnMap(null); // Clear placement mode after click
+                  notify('Model konumu güncellendi', 'success');
+                }
+              }
+            }}
           />
         </EngineeringLayout>
       )}
@@ -461,6 +482,14 @@ const App: React.FC = () => {
           onShare={executeProjectShare}
           assets={assets.filter(a => a.project_id === sharingProject.id)}
           measurements={[]}
+        />
+      )}
+
+      {/* Model Viewer Overlay */}
+      {_activeModelLayer && (
+        <UncoordinatedModelViewer
+          layer={_activeModelLayer}
+          onClose={() => _setActiveModelLayer(null)}
         />
       )}
 

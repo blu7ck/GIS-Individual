@@ -10,6 +10,7 @@ export async function saveMeasurementAsAnnotation(
     name: string,
     text: string,
     geometry: any,
+    mode: string,
     config: StorageConfig | null
 ): Promise<{ success: boolean; data?: AssetLayer; error?: string }> {
     if (!config?.supabaseUrl || !config?.supabaseKey) {
@@ -66,7 +67,8 @@ export async function saveMeasurementAsAnnotation(
             opacity: 1,
             data: {
                 text,
-                geometry
+                geometry,
+                mode
             },
             status: AssetStatus.READY
         };

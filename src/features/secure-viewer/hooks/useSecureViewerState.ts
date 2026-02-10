@@ -14,6 +14,9 @@ export function useSecureViewerState() {
     const [flyToLayerId, setFlyToLayerId] = useState<string | null>(null);
     const [activeTilesetId, setActiveTilesetId] = useState<string | null>(null);
 
+    // Interactive Placement State
+    const [positioningLayerId, setPositioningLayerId] = useState<string | null>(null);
+
     // Map Settings
     const [mapType, setMapType] = useState<MapType>(MapType.OPENSTREETMAP);
     const [sceneMode] = useState<SceneViewMode>(SceneViewMode.SCENE3D);
@@ -47,6 +50,20 @@ export function useSecureViewerState() {
         setLayers(prev => prev.map(l => l.id === id ? { ...l, visible: !l.visible } : l));
     };
 
+    const updateLayerPosition = (id: string, lat: number, lng: number, height: number = 0) => {
+        setLayers(prev => prev.map(l => l.id === id ? { ...l, position: { lat, lng, height } } : l));
+    };
+
+    const renameLayer = (id: string, name: string) => {
+        setLayers(prev => prev.map(l => l.id === id ? { ...l, name } : l));
+    };
+
+    const deleteLayer = (id: string) => {
+        setLayers(prev => prev.filter(l => l.id !== id));
+        if (activeModelLayer?.id === id) setActiveModelLayer(null);
+        if (flyToLayerId === id) setFlyToLayerId(null);
+    };
+
     return {
         layers,
         setLayers,
@@ -60,10 +77,15 @@ export function useSecureViewerState() {
         setFlyToLayerId,
         activeTilesetId,
         setActiveTilesetId,
+        positioningLayerId,
+        setPositioningLayerId,
         mapType,
         setMapType,
         sceneMode,
         qualitySettings,
-        toggleLayer
+        toggleLayer,
+        updateLayerPosition,
+        renameLayer,
+        deleteLayer
     };
 }

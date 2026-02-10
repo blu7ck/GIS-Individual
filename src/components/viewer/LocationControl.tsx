@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { LocateFixed, X, Loader2, AlertCircle } from 'lucide-react';
+import { PerformanceMode } from '../../types';
 
 interface LocationControlProps {
     isTracking: boolean;
@@ -9,16 +10,18 @@ interface LocationControlProps {
     onStartTracking: () => void;
     onStopTracking: () => void;
     onFlyToLocation?: () => void;
+    performanceMode?: PerformanceMode;
 }
 
 export const LocationControl: React.FC<LocationControlProps> = ({
     isTracking,
     isLoading,
-    hasPosition,
+    hasPosition: _hasPosition,
     error,
     onStartTracking,
     onStopTracking,
     onFlyToLocation,
+    performanceMode
 }) => {
     const [showError, setShowError] = useState(false);
     const [longPressProgress, setLongPressProgress] = useState(0);
@@ -56,7 +59,7 @@ export const LocationControl: React.FC<LocationControlProps> = ({
     // INTERACTION HANDLERS
     // ------------------------------------------------------------------------
 
-    const handlePressStart = (e: React.MouseEvent | React.TouchEvent) => {
+    const handlePressStart = (_e: React.MouseEvent | React.TouchEvent) => {
         // Only start long press logic if we are already tracking
         if (!isTracking) return;
 
@@ -99,7 +102,7 @@ export const LocationControl: React.FC<LocationControlProps> = ({
         setLongPressProgress(0); // Reset visual
     };
 
-    const handleClick = (e: React.MouseEvent) => {
+    const handleClick = (_e: React.MouseEvent) => {
         // If this click comes after a successful long press, ignore it
         if (ignoreClickRef.current) {
             ignoreClickRef.current = false;
@@ -164,12 +167,13 @@ export const LocationControl: React.FC<LocationControlProps> = ({
                     onTouchCancel={handlePressEnd}
                     onContextMenu={(e) => e.preventDefault()}
                     disabled={isLoading}
-                    className={`relative w-10 h-10 md:w-12 md:h-12 rounded-full shadow-lg flex items-center justify-center transition-all duration-300 active:scale-90 backdrop-blur-md border overflow-hidden select-none touch-manipulation group
+                    className={`relative w-12 h-12 md:w-14 md:h-14 rounded-full shadow-2xl flex items-center justify-center transition-all duration-300 active:scale-90 border-2 overflow-hidden select-none touch-manipulation group
+                        ${performanceMode === PerformanceMode.BATTERY_SAVER ? 'bg-black' : 'bg-black/60 backdrop-blur-xl'}
                         ${buttonState === 'active'
-                            ? 'bg-teal-500/90 border-teal-400 text-white shadow-teal-500/30'
-                            : 'bg-black/40 border-white/10 text-white/70 hover:bg-black/60 hover:text-white hover:border-white/30'
+                            ? 'bg-emerald-600 border-emerald-400 text-white shadow-[0_0_20px_rgba(16,185,129,0.4)]'
+                            : 'border-white/20 text-gray-400 hover:text-white hover:border-white/40'
                         }
-                        ${isLoading ? 'opacity-70 cursor-wait' : 'hover:scale-105'}
+                        ${isLoading ? 'opacity-70 cursor-wait' : 'hover:scale-110'}
                     `}
                     title={buttonState === 'active' ? 'Tıkla: Odakla | Basılı tut: Kapat' : 'Konumunu Bul'}
                 >
@@ -199,12 +203,12 @@ export const LocationControl: React.FC<LocationControlProps> = ({
                     {/* Icon */}
                     <div className="relative z-10 transition-transform duration-300 group-hover:scale-110">
                         {isLoading ? (
-                            <Loader2 size={24} className="animate-spin text-white/50" />
+                            <Loader2 size={24} className="animate-spin text-emerald-500" />
                         ) : (
                             <LocateFixed
                                 size={22}
                                 strokeWidth={buttonState === 'active' ? 2.5 : 2}
-                                className={`transition-all ${buttonState === 'active' ? 'fill-teal-100/50 text-white' : ''}`}
+                                className={`transition-all ${buttonState === 'active' ? 'text-white' : 'text-gray-400'}`}
                             />
                         )}
                     </div>

@@ -9,7 +9,6 @@ export function useLayerManager(
     setAssets: React.Dispatch<React.SetStateAction<AssetLayer[]>>,
     storageConfig: StorageConfig | null,
     notify: (msg: string, type: NotificationType) => void,
-    setActiveModelLayer: (layer: AssetLayer | null) => void,
     setActivePotreeLayer: (layer: AssetLayer | null) => void,
     setStorageRefreshKey?: React.Dispatch<React.SetStateAction<number>>
 ) {
@@ -19,13 +18,13 @@ export function useLayerManager(
         const layer = assets.find(a => a.id === layerId);
         if (!layer) return;
 
-        // GLTF - Uncoordinated
+        // GLTF - Uncoordinated: Fly to it, but don't open the viewer (Viewer is internal only)
         if (layer.type === LayerType.GLB_UNCOORD) {
-            setActiveModelLayer(layer);
+            setFlyToLayerId(layerId);
             return;
         }
 
-        // POTREE or LAS - Point Cloud
+        // POTREE or LAS - Point Cloud (Exclusive mode requires opening)
         if (layer.type === LayerType.POTREE || layer.type === LayerType.LAS) {
             setActivePotreeLayer(layer);
             return;
@@ -37,9 +36,6 @@ export function useLayerManager(
             setAssets(prev => prev.map(a =>
                 a.id === layerId ? { ...a, visible: true } : a
             ));
-
-            // Set flyTo immediately or with slight delay if we want to ensure visibility toggle state reaches Cesium
-            // But we removed the timeout clearing, useLayers will clear it.
             setFlyToLayerId(layerId);
         } else {
             setFlyToLayerId(layerId);
@@ -76,9 +72,6 @@ export function useLayerManager(
     };
 
     const handleDeleteLayer = async (id: string) => {
-        // Confirmation handles by UI
-
-
         const asset = assets.find(a => a.id === id);
         if (!asset) return;
 

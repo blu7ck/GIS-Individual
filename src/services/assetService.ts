@@ -232,7 +232,7 @@ export async function uploadFolderAsset(
             url: finalUrl,
             visible: false,
             opacity: 1,
-            status: type === LayerType.POTREE ? AssetStatus.READY : AssetStatus.READY // Potree is ready after upload, no processing needed for pre-converted
+            status: type === LayerType.POTREE ? AssetStatus.READY : AssetStatus.READY
         };
 
         // Save to Supabase
@@ -328,11 +328,11 @@ export async function deleteAsset(
 }
 
 /**
- * Update asset metadata (heightOffset, scale, etc.)
+ * Update asset metadata (heightOffset, scale, etc.) and location
  */
 export async function updateAssetMetadata(
     assetId: string,
-    metadata: { heightOffset?: number; scale?: number },
+    updates: { heightOffset?: number; scale?: number; offsetX?: number; offsetY?: number; rotation?: number; position?: { lat: number; lng: number; height: number } },
     config: StorageConfig | null
 ): Promise<AssetServiceResult> {
     if (config?.supabaseUrl && config?.supabaseKey) {
@@ -342,20 +342,28 @@ export async function updateAssetMetadata(
             // First fetch current metadata to merge
             const { data: current, error: fetchError } = await supabase
                 .from('assets')
-                .select('metadata')
+                .select('metadata, position')
                 .eq('id', assetId)
                 .single();
 
             if (fetchError) throw fetchError;
 
+            // Separate metadata fields from top-level column fields
+            const { position, ...metadataUpdates } = updates;
+
             const newMetadata = {
                 ...(current?.metadata || {}),
-                ...metadata
+                ...metadataUpdates
             };
+
+            const dbUpdate: any = { metadata: newMetadata };
+            if (position !== undefined) {
+                dbUpdate.position = position;
+            }
 
             const { error } = await supabase
                 .from('assets')
-                .update({ metadata: newMetadata })
+                .update(dbUpdate)
                 .eq('id', assetId);
 
             if (error) {
@@ -445,6 +453,9 @@ export async function fetchAssets(
                 tiles_url: row.tiles_url as string | undefined,
                 error_message: row.error_message as string | undefined,
                 heightOffset: rawMetadata.heightOffset,
+                offsetX: rawMetadata.offsetX,
+                offsetY: rawMetadata.offsetY,
+                rotation: rawMetadata.rotation,
                 scale: rawMetadata.scale,
                 metadata: rawMetadata
             };

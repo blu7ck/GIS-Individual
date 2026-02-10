@@ -33,6 +33,12 @@ export const FileUpload: React.FC<FileUploadProps> = ({
   const [dxfReferenceLon, setDxfReferenceLon] = useState<string>('');
   const [dxfReferenceLat, setDxfReferenceLat] = useState<string>('');
 
+  // GLB için koordinat sistemi seçenekleri
+  const [glbGeoreferenced, setGlbGeoreferenced] = useState<boolean>(false);
+  const [glbLon, setGlbLon] = useState<string>('');
+  const [glbLat, setGlbLat] = useState<string>('');
+  const [glbHeight, setGlbHeight] = useState<string>('0');
+
   // LAS için dönüşüm seçeneği
   const [lasConversionMode, setLasConversionMode] = useState<'OCTREE' | 'TILES_3D'>('OCTREE');
 
@@ -51,6 +57,16 @@ export const FileUpload: React.FC<FileUploadProps> = ({
           if (!isNaN(lon) && !isNaN(lat)) {
             options = { referencePoint: [lon, lat], autoCenter: false };
           }
+        }
+      }
+
+      // GLB için options hazırla
+      if (selectedType === LayerType.GLB_UNCOORD && glbGeoreferenced) {
+        const lon = parseFloat(glbLon);
+        const lat = parseFloat(glbLat);
+        const height = parseFloat(glbHeight) || 0;
+        if (!isNaN(lon) && !isNaN(lat)) {
+          options = { position: { lng: lon, lat, height } };
         }
       }
 
@@ -86,7 +102,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
       case LayerType.KML: return 'bg-orange-500/20 text-orange-400 border-orange-500/30';
       case LayerType.DXF: return 'bg-pink-500/20 text-pink-400 border-pink-500/30';
       case LayerType.SHP: return 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30';
-      case LayerType.TILES_3D: return 'bg-teal-500/20 text-teal-400 border-teal-500/30'; // Teal (Scarab)
+      case LayerType.TILES_3D: return 'bg-teal-500/20 text-teal-400 border-teal-500/30';
       case LayerType.POTREE: return 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30';
       case LayerType.LAS: return 'bg-rose-500/20 text-rose-400 border-rose-500/30';
       case LayerType.GLB_UNCOORD: return 'bg-purple-500/20 text-purple-400 border-purple-500/30';
@@ -99,9 +115,29 @@ export const FileUpload: React.FC<FileUploadProps> = ({
       case LayerType.TILES_3D: return 'teal';
       case LayerType.POTREE: return 'indigo';
       case LayerType.LAS: return 'rose';
+      case LayerType.KML: return 'orange';
+      case LayerType.DXF: return 'pink';
+      case LayerType.SHP: return 'cyan';
+      case LayerType.GLB_UNCOORD: return 'purple';
       default: return 'emerald';
     }
   };
+
+  // Static styles mapping for theme colors to avoid Tailwind purging dynamic strings
+  const themeStyles: Record<string, { bg: string, border: string, text: string, accent: string, hover: string }> = {
+    teal: { bg: 'bg-teal-500/10', border: 'border-teal-500/20', text: 'text-teal-400', accent: 'bg-teal-500', hover: 'hover:bg-teal-600/30' },
+    indigo: { bg: 'bg-indigo-500/10', border: 'border-indigo-500/20', text: 'text-indigo-400', accent: 'bg-indigo-500', hover: 'hover:bg-indigo-600/30' },
+    rose: { bg: 'bg-rose-500/10', border: 'border-rose-500/20', text: 'text-rose-400', accent: 'bg-rose-500', hover: 'hover:bg-rose-600/30' },
+    orange: { bg: 'bg-orange-500/10', border: 'border-orange-500/20', text: 'text-orange-400', accent: 'bg-orange-500', hover: 'hover:bg-orange-600/30' },
+    pink: { bg: 'bg-pink-500/10', border: 'border-pink-500/20', text: 'text-pink-400', accent: 'bg-pink-500', hover: 'hover:bg-pink-600/30' },
+    cyan: { bg: 'bg-cyan-500/10', border: 'border-cyan-500/20', text: 'text-cyan-400', accent: 'bg-cyan-500', hover: 'hover:bg-cyan-600/30' },
+    purple: { bg: 'bg-purple-500/10', border: 'border-purple-500/20', text: 'text-purple-400', accent: 'bg-purple-500', hover: 'hover:bg-purple-600/30' },
+    emerald: { bg: 'bg-emerald-500/10', border: 'border-emerald-500/20', text: 'text-emerald-400', accent: 'bg-emerald-500', hover: 'hover:bg-emerald-600/30' },
+  };
+
+  // Dynamic theme for upload section
+  const theme = getThemeColor(selectedType);
+  const currentTheme = themeStyles[theme] || themeStyles.emerald;
 
   const TypeButton = ({ type, label, description }: { type: LayerType, label: string, description?: string }) => {
     const isSelected = selectedType === type;
@@ -122,9 +158,6 @@ export const FileUpload: React.FC<FileUploadProps> = ({
       </button>
     );
   };
-
-  // Dynamic theme for upload section
-  const theme = getThemeColor(selectedType);
 
   return (
     <div className={`space-y-6 ${className || ''}`}>
@@ -148,19 +181,19 @@ export const FileUpload: React.FC<FileUploadProps> = ({
 
         {/* LAS Options */}
         {selectedType === LayerType.LAS && (
-          <div className={`mb-4 space-y-3 p-3 bg-${theme}-500/10 border border-${theme}-500/20 rounded-lg`}>
-            <p className={`text-xs font-semibold text-${theme}-400 mb-2`}>Processing Mode</p>
+          <div className={`mb-4 space-y-3 p-3 ${currentTheme.bg} border ${currentTheme.border} rounded-lg`}>
+            <p className={`text-xs font-semibold ${currentTheme.text} mb-2`}>Processing Mode</p>
             <div className="grid grid-cols-2 gap-3">
-              <label className={`flex flex-col p-2 rounded border cursor-pointer transition-colors ${lasConversionMode === 'OCTREE' ? `bg-${theme}-500/20 border-${theme}-500/40` : 'bg-black/20 border-white/5 hover:bg-white/5'}`}>
+              <label className={`flex flex-col p-2 rounded border cursor-pointer transition-colors ${lasConversionMode === 'OCTREE' ? `${currentTheme.bg} ${currentTheme.border}` : 'bg-black/20 border-white/5 hover:bg-white/5'}`}>
                 <div className="flex items-center gap-2 mb-1">
-                  <input type="radio" name="las-mode" checked={lasConversionMode === 'OCTREE'} onChange={() => setLasConversionMode('OCTREE')} className={`accent-${theme}-500`} />
+                  <input type="radio" name="las-mode" checked={lasConversionMode === 'OCTREE'} onChange={() => setLasConversionMode('OCTREE')} style={{ accentColor: theme.startsWith('#') ? theme : currentTheme.accent.replace('bg-', '') }} />
                   <span className="text-xs font-bold text-gray-200">Octree (Potree)</span>
                 </div>
                 <span className="text-[10px] text-gray-400 ml-5">High detail analysis & colorization.</span>
               </label>
-              <label className={`flex flex-col p-2 rounded border cursor-pointer transition-colors ${lasConversionMode === 'TILES_3D' ? `bg-${theme}-500/20 border-${theme}-500/40` : 'bg-black/20 border-white/5 hover:bg-white/5'}`}>
+              <label className={`flex flex-col p-2 rounded border cursor-pointer transition-colors ${lasConversionMode === 'TILES_3D' ? `${currentTheme.bg} ${currentTheme.border}` : 'bg-black/20 border-white/5 hover:bg-white/5'}`}>
                 <div className="flex items-center gap-2 mb-1">
-                  <input type="radio" name="las-mode" checked={lasConversionMode === 'TILES_3D'} onChange={() => setLasConversionMode('TILES_3D')} className={`accent-${theme}-500`} />
+                  <input type="radio" name="las-mode" checked={lasConversionMode === 'TILES_3D'} onChange={() => setLasConversionMode('TILES_3D')} style={{ accentColor: theme.startsWith('#') ? theme : currentTheme.accent.replace('bg-', '') }} />
                   <span className="text-xs font-bold text-gray-200">3D Tiles</span>
                 </div>
                 <span className="text-[10px] text-gray-400 ml-5">Optimized for map context.</span>
@@ -225,6 +258,56 @@ export const FileUpload: React.FC<FileUploadProps> = ({
           </div>
         )}
 
+        {/* GLB Options */}
+        {selectedType === LayerType.GLB_UNCOORD && (
+          <div className="mb-4 space-y-3 p-3 bg-purple-500/10 border border-purple-500/20 rounded-lg">
+            <p className="text-xs font-semibold text-purple-400 mb-2">Map Placement (Optional)</p>
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 cursor-pointer group">
+                <input
+                  type="checkbox"
+                  checked={glbGeoreferenced}
+                  onChange={(e) => setGlbGeoreferenced(e.target.checked)}
+                  className="accent-purple-500 rounded"
+                />
+                <div className="flex flex-col">
+                  <span className="text-xs text-gray-300 group-hover:text-white transition-colors">Georeference Model</span>
+                  <span className="text-[10px] text-gray-500">Enable this to position the model at specific coordinates on the map.</span>
+                </div>
+              </label>
+
+              {glbGeoreferenced && (
+                <div className="grid grid-cols-2 gap-3 mt-2 pl-6 animate-in slide-in-from-top-2">
+                  <div>
+                    <label className="text-[10px] text-purple-400/80 mb-1 block">Longitude</label>
+                    <input
+                      type="number" step="any" placeholder="32.0"
+                      className="w-full bg-black/40 border border-purple-500/30 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-purple-500 transition-colors"
+                      value={glbLon} onChange={(e) => setGlbLon(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-purple-400/80 mb-1 block">Latitude</label>
+                    <input
+                      type="number" step="any" placeholder="39.0"
+                      className="w-full bg-black/40 border border-purple-500/30 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-purple-500 transition-colors"
+                      value={glbLat} onChange={(e) => setGlbLat(e.target.value)}
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="text-[10px] text-purple-400/80 mb-1 block">Height (Altitude)</label>
+                    <input
+                      type="number" step="any" placeholder="0.0"
+                      className="w-full bg-black/40 border border-purple-500/30 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-purple-500 transition-colors"
+                      value={glbHeight} onChange={(e) => setGlbHeight(e.target.value)}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Folder / URL Options for Complex Types */}
         {(selectedType === LayerType.TILES_3D || selectedType === LayerType.POTREE) ? (
           <div className="space-y-4">
@@ -241,7 +324,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
               />
               <Button
                 onClick={() => folderInputRef.current?.click()}
-                className={`w-full justify-center bg-${theme}-600/20 hover:bg-${theme}-600/30 text-${theme}-400 border-${theme}-500/30`}
+                className={`w-full justify-center border-white/10 ${currentTheme.bg} ${currentTheme.hover} ${currentTheme.text}`}
                 disabled={isUploading}
               >
                 {isUploading ? <Loader2 size={16} className="animate-spin mr-2" /> : <FolderUp size={16} className="mr-2" />}
@@ -320,7 +403,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
                   <span>{Math.round(uploadProgressPercent)}%</span>
                 </div>
                 <div className="w-full bg-black/40 rounded-full h-1.5 overflow-hidden">
-                  <div className="h-full bg-emerald-500 transition-all duration-300" style={{ width: `${uploadProgressPercent}%` }} />
+                  <div className={`h-full ${currentTheme.accent} transition-all duration-300`} style={{ width: `${uploadProgressPercent}%` }} />
                 </div>
               </div>
             )}

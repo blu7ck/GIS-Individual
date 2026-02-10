@@ -32,9 +32,9 @@ export const UploadTool: React.FC<Props> = ({
             />
 
             {/* Modal Content */}
-            <div className="relative w-full max-w-xl bg-engineering-panel/90 border border-engineering-border shadow-2xl rounded-2xl overflow-hidden animate-in zoom-in-95 fade-in duration-300 backdrop-blur-xl">
+            <div className="relative w-full max-w-xl max-h-[90vh] flex flex-col bg-engineering-panel/90 border border-engineering-border shadow-2xl rounded-2xl overflow-hidden animate-in zoom-in-95 fade-in duration-300 backdrop-blur-xl">
                 {/* Modal Header */}
-                <div className="flex items-center justify-between p-4 border-b border-engineering-border bg-white/5">
+                <div className="flex-none flex items-center justify-between p-4 border-b border-engineering-border bg-white/5">
                     <div className="flex flex-col">
                         <h2 className="text-lg font-bold text-white tracking-tight">Upload Assets</h2>
                         <p className="text-xs text-gray-400">Add 3D models, KML, or other GIS data to your project</p>
@@ -50,7 +50,7 @@ export const UploadTool: React.FC<Props> = ({
                 </div>
 
                 {/* Upload Area */}
-                <div className="p-6">
+                <div className="p-6 overflow-y-auto custom-scrollbar bg-black/20">
                     <FileUpload
                         onUpload={onUpload}
                         onFolderUpload={onFolderUpload}

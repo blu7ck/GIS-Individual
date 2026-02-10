@@ -73,10 +73,10 @@ export function useProjectData(user: User | null, storageConfig: StorageConfig |
         }
     };
 
-    const handleUpdateAssetMetadata = async (assetId: string, metadata: { heightOffset?: number; scale?: number }) => {
-        const result = await updateAssetMetadata(assetId, metadata, storageConfig);
+    const handleUpdateAssetMetadata = async (assetId: string, updates: { heightOffset?: number; scale?: number; offsetX?: number; offsetY?: number; rotation?: number; position?: { lat: number; lng: number; height: number } }) => {
+        const result = await updateAssetMetadata(assetId, updates, storageConfig);
         if (result.success) {
-            setAssets(prev => prev.map(a => a.id === assetId ? { ...a, ...metadata } : a));
+            setAssets(prev => prev.map(a => a.id === assetId ? { ...a, ...updates } : a));
             notify('Asset properties updated', 'success');
         } else {
             notify(result.error || 'Failed to update asset', 'error');

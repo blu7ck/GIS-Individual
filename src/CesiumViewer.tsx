@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import * as Cesium from 'cesium';
 import { AssetLayer, MeasurementMode, QualitySettings, MapType, SceneViewMode } from './types';
 import { Check, X } from 'lucide-react';
@@ -47,6 +47,8 @@ interface Props {
   onMouseMove?: (coords: { lat: number; lng: number; height: number }) => void;
   onCameraChange?: (height: number, heading: number, pitch: number, zoomLevel: number) => void;
   onViewerReady?: (viewer: Cesium.Viewer) => void;
+  onMapClick?: (coords: { lat: number; lng: number; height: number }) => void;
+  positioningLayerId?: string | null;
 }
 
 const CesiumViewer: React.FC<Props> = React.memo(({
@@ -57,7 +59,10 @@ const CesiumViewer: React.FC<Props> = React.memo(({
   flyToLayerId,
   mapType = MapType.STANDARD,
   sceneMode = SceneViewMode.SCENE3D,
+  paused = false,
   onTilesetClick,
+  className, // Added this to destructuring as it's in Props but not in original destructuring
+  full = false, // Added this to destructuring as it's in Props but not in original destructuring
 
   userLocation,
   showUserLocation = false,
@@ -67,8 +72,13 @@ const CesiumViewer: React.FC<Props> = React.memo(({
   qualitySettings,
   onMouseMove,
   onCameraChange,
-  onViewerReady
+  onViewerReady,
+  onMapClick,
+  positioningLayerId
 }) => {
+  // Suppress unused variable warning - used in memo comparison
+  void positioningLayerId;
+
   // 1. Viewer Lifecycle Stability: Use useRef instead of useState
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Cesium.Viewer | null>(null);
@@ -78,6 +88,7 @@ const CesiumViewer: React.FC<Props> = React.memo(({
   const kmlRefs = useRef<Map<string, any>>(new Map());
   const tilesetRefs = useRef<Map<string, any>>(new Map());
   const geoJsonRefs = useRef<Map<string, any>>(new Map());
+  const modelRefs = useRef<Map<string, any>>(new Map());
 
   const [isViewerReady, setIsViewerReady] = React.useState(false);
   const [initError, setInitError] = React.useState<string | null>(null);
@@ -118,6 +129,7 @@ const CesiumViewer: React.FC<Props> = React.memo(({
         imageryProvider: initialImagery, // Guaranteed start imagery
         requestRenderMode: true, // Optimized for performance
         maximumRenderTimeChange: 0.1, // Smooth updates when needed
+        useBrowserRecommendedResolution: true, // Better resolution handling
         contextOptions: {
           webgl: {
             alpha: true,
@@ -128,6 +140,9 @@ const CesiumViewer: React.FC<Props> = React.memo(({
           }
         }
       } as Cesium.Viewer.ConstructorOptions);
+
+      // Apply the 'paused' state to requestRenderMode
+      v.scene.requestRenderMode = !!paused;
 
       // Apply defaults
       setupViewerDefaults(v);
@@ -279,6 +294,23 @@ const CesiumViewer: React.FC<Props> = React.memo(({
     }
   }, [sceneMode, isViewerReady]);
 
+  // 4.5 Performance: Handle 'paused' state
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer || viewer.isDestroyed()) return;
+
+    // When paused, we set requestRenderMode to true and DON'T call requestRender()
+    // When unpaused, we might want to keep requestRenderMode true but ensure it renders on change
+    viewer.scene.requestRenderMode = true; // Always keep true for GIS efficiency
+
+    if (paused) {
+      logger.info('[CesiumViewer] Rendering paused');
+    } else {
+      logger.info('[CesiumViewer] Rendering active');
+      viewer.scene.requestRender();
+    }
+  }, [paused, isViewerReady]);
+
 
   // 5. Event Safety & 6. Camera Safety
   useEffect(() => {
@@ -318,6 +350,26 @@ const CesiumViewer: React.FC<Props> = React.memo(({
       }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
     }
 
+    if (onMapClick) {
+      handler.setInputAction((movement: Cesium.ScreenSpaceEventHandler.PositionedEvent) => {
+        let cartesian: Cesium.Cartesian3 | undefined = viewer.scene.pickPosition(movement.position);
+
+        if (!cartesian) {
+          const ray = viewer.camera.getPickRay(movement.position);
+          cartesian = ray ? (viewer.scene.globe.pick(ray, viewer.scene) || undefined) : undefined;
+        }
+
+        if (cartesian) {
+          const cartographic = Cesium.Cartographic.fromCartesian(cartesian);
+          onMapClick({
+            lat: Cesium.Math.toDegrees(cartographic.latitude),
+            lng: Cesium.Math.toDegrees(cartographic.longitude),
+            height: cartographic.height
+          });
+        }
+      }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+    }
+
     // Camera Handler
     const updateCameraStats = () => {
       if (!onCameraChange) return;
@@ -345,7 +397,7 @@ const CesiumViewer: React.FC<Props> = React.memo(({
         viewer.camera.changed.removeEventListener(updateCameraStats);
       }
     };
-  }, [onMouseMove, onCameraChange]); // Viewer ref stable
+  }, [onMouseMove, onCameraChange, onMapClick]); // Added onMapClick dependency
 
   // 8. Hook Validation - Connecting hooks
   // Note: custom hooks need to be updated to accept viewer instance if they don't already, 
@@ -380,7 +432,8 @@ const CesiumViewer: React.FC<Props> = React.memo(({
     onTilesetClick,
     tilesetRefs,
     kmlRefs,
-    geoJsonRefs
+    geoJsonRefs,
+    modelRefs
   });
 
   const { points, tempPoint, measurementText, measurementPosition, clearMeasurement, finishCurrentMeasurement } = useMeasurement({
@@ -390,7 +443,10 @@ const CesiumViewer: React.FC<Props> = React.memo(({
   });
 
   return (
-    <div className="absolute inset-0">
+    <div
+      className={full ? 'fixed inset-0 z-0' : `relative ${className || ''}`}
+      style={!full ? { width: '100%', height: '100%' } : undefined}
+    >
       {/* Measurement FAB Buttons */}
       {/* Measurement UI - Centered Bottom (Raised) */}
       {measurementMode !== MeasurementMode.NONE && (
@@ -441,6 +497,13 @@ const CesiumViewer: React.FC<Props> = React.memo(({
         </div>
       )}
 
+      {/* Hide Cesium Credits */}
+      <style>
+        {`
+          .cesium-widget-credits { display: none !important; }
+        `}
+      </style>
+
       {/* Native Container */}
       <div
         ref={containerRef}
@@ -488,10 +551,9 @@ const CesiumViewer: React.FC<Props> = React.memo(({
     // User location might be new object every time, so deep check needed or just check primitive lat/lng
     prev.userLocation?.lat === next.userLocation?.lat &&
     prev.userLocation?.lng === next.userLocation?.lng &&
-    // Layers: check reference first?
-    prev.layers === next.layers
-    // If strict deep check needed:
-    // (prev.layers === next.layers || (prev.layers.length === next.layers.length && prev.layers.every((l,i) => l === next.layers[i])))
+    prev.layers === next.layers &&
+    prev.onMapClick === next.onMapClick &&
+    (prev as any).positioningLayerId === (next as any).positioningLayerId
   );
 });
 

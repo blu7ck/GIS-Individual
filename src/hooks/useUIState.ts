@@ -16,6 +16,8 @@ export function useUIState() {
     const [createProjectTrigger, setCreateProjectTrigger] = useState(0);
     const [showSettings, setShowSettings] = useState(false);
     const [activeModelLayer, setActiveModelLayer] = useState<AssetLayer | null>(null);
+    const [positioningLayerId, setPositioningLayerId] = useState<string | null>(null);
+    const [isPlacingOnMap, setIsPlacingOnMap] = useState<string | null>(null);
 
     // Notifications
     const [notifications, setNotifications] = useState<NotificationItem[]>([]);
@@ -78,6 +80,10 @@ export function useUIState() {
         setShowSettings,
         activeModelLayer,
         setActiveModelLayer,
+        positioningLayerId,
+        setPositioningLayerId,
+        isPlacingOnMap,
+        setIsPlacingOnMap,
         notifications,
 
         // Actions

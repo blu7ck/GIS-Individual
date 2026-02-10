@@ -346,11 +346,6 @@ export function useMeasurement({ viewer, mode, onMeasurementResult }: UseMeasure
             // console.error("Measurement finish error", e);
         }
 
-        setPoints([]);
-        setTempPoint(null);
-        setMeasurementText("");
-        setMeasurementPosition(null);
-
     }, [viewer, mode, onMeasurementResult]);
 
     // Interaction Logic

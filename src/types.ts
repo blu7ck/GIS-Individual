@@ -57,8 +57,11 @@ export interface AssetLayer {
   visible: boolean;
   opacity: number;
   data?: any; // For annotations (GeoJSON content)
-  heightOffset?: number; // Runtime-only: 3D Tiles için manuel yükseklik offset (metre)
-  scale?: number; // Runtime-only: 3D Tiles için ölçek faktörü (default: 1.0)
+  heightOffset?: number; // Runtime-only: 3D Tiles ve GLB için manuel yükseklik offset (metre)
+  offsetX?: number; // Manuel X kaydırma (metre)
+  offsetY?: number; // Manuel Y kaydırma (metre)
+  rotation?: number; // Manuel rotasyon (derece)
+  scale?: number; // Runtime-only: 3D Tiles ve GLB için ölçek faktörü (default: 1.0)
   status?: AssetStatus; // Processing status for LAS/LAZ
   potree_url?: string; // URL to Potree octree output (for PotreeViewer)
   tiles_url?: string; // URL to 3D Tiles output (for Cesium)
@@ -170,12 +173,12 @@ export const QUALITY_PRESETS: Record<QualityLevel, Omit<QualitySettings, 'qualit
 };
 
 // Default kalite ayarları oluştur
-export const getDefaultQualitySettings = (isMobile: boolean): QualitySettings => {
-  const defaultLevel = isMobile ? QualityLevel.MEDIUM : QualityLevel.HIGH;
+export const getDefaultQualitySettings = (): QualitySettings => {
+  const defaultLevel = QualityLevel.MEDIUM;
   const preset = QUALITY_PRESETS[defaultLevel];
   return {
     qualityLevel: defaultLevel,
-    performanceMode: isMobile ? PerformanceMode.BALANCED : PerformanceMode.HIGH_PERFORMANCE,
+    performanceMode: PerformanceMode.BALANCED,
     ...preset
   };
 };

@@ -1,6 +1,5 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState } from 'react';
 import * as Cesium from 'cesium';
-import type { Viewer } from 'cesium';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 // Layout Components
@@ -51,7 +50,7 @@ interface EngineeringLayoutProps {
     onShareLayer: (layer: AssetLayer) => void;
     onToggleAllLayers?: (projectId: string, visible: boolean) => void;
     onOpenModelViewer?: (asset: AssetLayer) => void;
-    onUpdateAsset?: (id: string, newName: string, updates?: { heightOffset?: number; scale?: number }) => void;
+    onUpdateAsset?: (id: string, newName: string, updates?: { heightOffset?: number; scale?: number; offsetX?: number; offsetY?: number; rotation?: number; position?: { lat: number; lng: number; height: number } }) => void;
 
     // View State
     sceneMode: SceneViewMode;
@@ -92,6 +91,10 @@ interface EngineeringLayoutProps {
     mouseCoordinates: { lat: number; lng: number; height: number } | null;
     cameraHeight: number;
     viewer?: Cesium.Viewer | null;
+    positioningLayerId?: string | null;
+    setPositioningLayerId?: (id: string | null) => void;
+    isPlacingOnMap?: string | null;
+    setIsPlacingOnMap?: (id: string | null) => void;
 }
 
 // ============================================================================
@@ -118,7 +121,6 @@ export const EngineeringLayout: React.FC<EngineeringLayoutProps> = ({
     onOpenModelViewer,
     onUpdateAsset,
     sceneMode,
-    setSceneMode,
     isViewerMode = false,
     activePopup,
     setActivePopup,
@@ -140,10 +142,14 @@ export const EngineeringLayout: React.FC<EngineeringLayoutProps> = ({
     onStopTracking,
     hasPosition,
     onFlyToLocation,
+    onFlyToComplete,
+    positioningLayerId,
+    setPositioningLayerId,
     mouseCoordinates,
     cameraHeight,
     viewer,
-    onFlyToComplete
+    isPlacingOnMap,
+    setIsPlacingOnMap,
 }) => {
     // ========================================================================
     // STATE
@@ -188,11 +194,13 @@ export const EngineeringLayout: React.FC<EngineeringLayoutProps> = ({
                 <>
                     {/* Sidebar Container with outside toggle */}
                     <div
-                        className={`fixed top-4 bottom-12 z-40 transition-all duration-300 ease-in-out ${sidebarOpen ? 'left-4 w-[320px]' : 'left-0 w-0'
+                        className={`fixed z-50 transition-all duration-300 ease-in-out ${sidebarOpen
+                                ? 'inset-0 md:inset-auto md:top-4 md:bottom-12 md:left-4 md:w-[320px]'
+                                : 'top-4 bottom-12 left-0 w-0'
                             }`}
                     >
                         {/* The Card - With Clipping */}
-                        <div className={`w-[320px] h-full transition-all duration-300 ease-in-out bg-engineering-panel/90 backdrop-blur-md border border-engineering-border rounded-2xl shadow-2xl overflow-hidden flex flex-col ${sidebarOpen ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0 pointer-events-none'
+                        <div className={`w-full md:w-[320px] h-full transition-all duration-300 ease-in-out bg-[#0a0a0a]/90 backdrop-blur-3xl border border-white/10 md:rounded-2xl shadow-2xl overflow-hidden flex flex-col ${sidebarOpen ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0 pointer-events-none'
                             }`}>
                             <ProjectPanel
                                 projects={projects}
@@ -212,6 +220,10 @@ export const EngineeringLayout: React.FC<EngineeringLayoutProps> = ({
                                 onUpdateAsset={onUpdateAsset}
                                 onOpenUpload={() => setActivePopup('upload')}
                                 onCancelUpload={onCancelUpload}
+                                positioningLayerId={positioningLayerId}
+                                setPositioningLayerId={setPositioningLayerId}
+                                isPlacingOnMap={isPlacingOnMap}
+                                setIsPlacingOnMap={setIsPlacingOnMap}
                                 isUploading={isUploading}
                                 uploadProgress={uploadProgress}
                                 uploadProgressPercent={uploadProgressPercent}
@@ -221,7 +233,7 @@ export const EngineeringLayout: React.FC<EngineeringLayoutProps> = ({
                         {/* Sidebar Toggle Button - OUTSIDE overflow-hidden */}
                         <button
                             onClick={() => setSidebarOpen(!sidebarOpen)}
-                            className={`absolute top-1/2 -translate-y-1/2 w-6 h-20 bg-engineering-panel/90 backdrop-blur-md border border-engineering-border border-l-0 rounded-r-xl flex items-center justify-center text-white/80 hover:text-white transition-all duration-300 cursor-pointer group shadow-lg z-50 ${sidebarOpen ? '-right-6' : 'left-0'
+                            className={`absolute top-1/2 -translate-y-1/2 w-6 h-20 bg-black/40 backdrop-blur-xl border border-white/5 border-l-0 rounded-r-xl flex items-center justify-center text-white/50 hover:text-white transition-all duration-300 cursor-pointer group shadow-lg z-50 ${sidebarOpen ? 'right-0 md:-right-6 bg-red-500/20 md:bg-black/40' : '-right-6'
                                 }`}
                             aria-label={sidebarOpen ? 'Paneli Kapat' : 'Paneli Aç'}
                         >
@@ -243,6 +255,7 @@ export const EngineeringLayout: React.FC<EngineeringLayoutProps> = ({
                             isLoading={false}
                             error={null}
                             onFlyToLocation={onFlyToLocation}
+                            performanceMode={qualitySettings?.performanceMode}
                         />
                         <Compass
                             viewer={viewer || null}
@@ -259,6 +272,7 @@ export const EngineeringLayout: React.FC<EngineeringLayoutProps> = ({
                             onToggle={() => togglePopup('measurements')}
                             activeMode={measurementMode}
                             onSetMode={setMeasurementMode}
+                            performanceMode={qualitySettings?.performanceMode}
                         />
 
                         {/* Map Settings */}
@@ -269,6 +283,7 @@ export const EngineeringLayout: React.FC<EngineeringLayoutProps> = ({
                             onQualityChange={setQualitySettings}
                             isOpen={activePopup === 'settings'}
                             onToggle={() => togglePopup('settings')}
+                            performanceMode={qualitySettings?.performanceMode}
                         />
                     </div>
 
