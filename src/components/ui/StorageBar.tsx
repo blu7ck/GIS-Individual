@@ -187,7 +187,7 @@ export const StorageBar: React.FC<Props> = ({ storageConfig, maxStorageGB = 10, 
                         <button
                             onClick={() => {
                                 if (window.confirm('Reset "Don\'t ask again" warnings? Page will reload.')) {
-                                    localStorage.removeItem('hekamap_delete_dont_ask');
+                                    localStorage.removeItem('gis_individual_delete_dont_ask');
                                     window.location.reload();
                                 }
                             }}

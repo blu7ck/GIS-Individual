@@ -352,7 +352,7 @@ export default {
               : fromEmail;
           } else {
             // Default fallback: env'den veya domain'den
-            fromAddress = env.MAILGUN_FROM_EMAIL || `HekaMap Muhendislik <project@${env.MAILGUN_DOMAIN}>`;
+            fromAddress = env.MAILGUN_FROM_EMAIL || `FixureLabs <project@${env.MAILGUN_DOMAIN}>`;
           }
 
           formData.append('from', fromAddress);

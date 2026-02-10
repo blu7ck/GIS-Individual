@@ -74,7 +74,7 @@ export const ProjectPanel: React.FC<Props> = ({
 
     // Initialize dontAskAgain from localStorage
     useEffect(() => {
-        const stored = localStorage.getItem('hekamap_delete_dont_ask');
+        const stored = localStorage.getItem('gis_individual_delete_dont_ask');
         if (stored === 'true') {
             setDontAskAgain(true);
         }
@@ -233,7 +233,7 @@ export const ProjectPanel: React.FC<Props> = ({
         if (!deleteConfirm) return;
 
         if (shouldDontAskAgain) {
-            localStorage.setItem('hekamap_delete_dont_ask', 'true');
+            localStorage.setItem('gis_individual_delete_dont_ask', 'true');
             setDontAskAgain(true);
         }
 
