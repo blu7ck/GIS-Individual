@@ -42,6 +42,7 @@ export function useSecureAuth(shareId: string, workerUrl: string): UseSecureAuth
                 console.log('[SecureViewer] Worker response layers:', data.layers.map((l: any) => ({
                     id: l.id,
                     name: l.name,
+                    type: l.type,
                     height_offset: l.height_offset,
                     heightOffset: l.heightOffset
                 })));

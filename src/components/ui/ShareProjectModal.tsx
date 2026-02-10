@@ -65,6 +65,11 @@ export const ShareProjectModal: React.FC<Props> = ({
       return;
     }
 
+    if (pin.length !== 6) {
+      alert('PIN must be exactly 6 digits');
+      return;
+    }
+
     setIsLoading(true);
     try {
       const link = await onShare(email, pin, duration * 24, Array.from(selectedAssets)); // Convert days to hours

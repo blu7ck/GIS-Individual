@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronLeft, ChevronRight, LayoutTemplate, Box, Globe, Eye, EyeOff, MapPin, ChevronDown, ChevronUp, Trash2, Edit2, Download, ExternalLink } from 'lucide-react';
+import { ChevronLeft, ChevronRight, LayoutTemplate, Box, Globe, Eye, EyeOff, MapPin, ChevronDown, ChevronUp, Trash2, Edit2, Download, ExternalLink, MousePointer2 } from 'lucide-react';
 import { Button } from '../../../components/common/Button';
 import { AssetLayer, LayerType } from '../../../types';
 

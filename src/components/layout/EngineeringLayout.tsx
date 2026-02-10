@@ -95,6 +95,7 @@ interface EngineeringLayoutProps {
     setPositioningLayerId?: (id: string | null) => void;
     isPlacingOnMap?: string | null;
     setIsPlacingOnMap?: (id: string | null) => void;
+    isSecureMode?: boolean;
 }
 
 // ============================================================================
@@ -150,6 +151,7 @@ export const EngineeringLayout: React.FC<EngineeringLayoutProps> = ({
     viewer,
     isPlacingOnMap,
     setIsPlacingOnMap,
+    isSecureMode = false,
 }) => {
     // ========================================================================
     // STATE
@@ -195,8 +197,8 @@ export const EngineeringLayout: React.FC<EngineeringLayoutProps> = ({
                     {/* Sidebar Container with outside toggle */}
                     <div
                         className={`fixed z-50 transition-all duration-300 ease-in-out ${sidebarOpen
-                                ? 'inset-0 md:inset-auto md:top-4 md:bottom-12 md:left-4 md:w-[320px]'
-                                : 'top-4 bottom-12 left-0 w-0'
+                            ? 'inset-0 md:inset-auto md:top-4 md:bottom-12 md:left-4 md:w-[320px]'
+                            : 'top-4 bottom-12 left-0 w-0'
                             }`}
                     >
                         {/* The Card - With Clipping */}
@@ -227,6 +229,7 @@ export const EngineeringLayout: React.FC<EngineeringLayoutProps> = ({
                                 isUploading={isUploading}
                                 uploadProgress={uploadProgress}
                                 uploadProgressPercent={uploadProgressPercent}
+                                readOnly={isSecureMode}
                             />
                         </div>
 
@@ -287,18 +290,20 @@ export const EngineeringLayout: React.FC<EngineeringLayoutProps> = ({
                         />
                     </div>
 
-                    {/* Standalone Upload Modal */}
-                    <UploadTool
-                        isOpen={activePopup === 'upload'}
-                        onToggle={() => togglePopup('upload')}
-                        selectedProjectId={selectedProjectId}
-                        onUpload={onUpload}
-                        onFolderUpload={onFolderUpload}
-                        onUrlAdd={onUrlAdd}
-                        isUploading={isUploading}
-                        uploadProgress={uploadProgress}
-                        uploadProgressPercent={uploadProgressPercent}
-                    />
+                    {/* Standalone Upload Modal - Only render if NOT in secure mode */}
+                    {!isSecureMode && (
+                        <UploadTool
+                            isOpen={activePopup === 'upload'}
+                            onToggle={() => togglePopup('upload')}
+                            selectedProjectId={selectedProjectId}
+                            onUpload={onUpload}
+                            onFolderUpload={onFolderUpload}
+                            onUrlAdd={onUrlAdd}
+                            isUploading={isUploading}
+                            uploadProgress={uploadProgress}
+                            uploadProgressPercent={uploadProgressPercent}
+                        />
+                    )}
                 </>
             )}
 

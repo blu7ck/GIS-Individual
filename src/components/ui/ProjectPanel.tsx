@@ -78,6 +78,7 @@ interface Props {
     uploadProgressPercent?: number;
     externalCreateTrigger?: number; // Increment to trigger create mode
     storageConfig?: StorageConfig | null; // For storage bar
+    readOnly?: boolean;
 }
 
 interface DeleteConfirmState {
@@ -112,7 +113,8 @@ export const ProjectPanel: React.FC<Props> = ({
     uploadProgress,
     uploadProgressPercent,
     externalCreateTrigger,
-    storageConfig
+    storageConfig,
+    readOnly = false
 }) => {
     // Stable random color generator for project folders
     const getProjectColor = (id: string) => {
@@ -554,34 +556,40 @@ export const ProjectPanel: React.FC<Props> = ({
                                     >
                                         <Download size={12} />
                                     </button>
-                                    <button
-                                        onClick={() => handleEditStart(asset)}
-                                        className="p-1.5 rounded-md text-gray-400 hover:text-white hover:bg-white/5 transition-all"
-                                        title="Yeniden Adlandır"
-                                    >
-                                        <Edit2 size={12} />
-                                    </button>
-                                    <button
-                                        onClick={() => requestDeleteLayer(asset.id, asset.name)}
-                                        className="p-1.5 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-500/10 transition-all"
-                                        title="Sil"
-                                    >
-                                        <Trash2 size={12} />
-                                    </button>
-                                    {asset.type === LayerType.GLB_UNCOORD && (
+                                    {!readOnly && (
                                         <>
                                             <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    if (setPositioningLayerId) {
-                                                        setPositioningLayerId(positioningLayerId === asset.id ? null : asset.id);
-                                                    }
-                                                }}
-                                                className={`p-1.5 rounded-md transition-colors ${positioningLayerId === asset.id ? 'text-emerald-400 bg-white/10' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
-                                                title="Modelleme Ayarları"
+                                                onClick={() => handleEditStart(asset)}
+                                                className="p-1.5 rounded-md text-gray-400 hover:text-white hover:bg-white/5 transition-all"
+                                                title="Yeniden Adlandır"
                                             >
-                                                <MousePointer2 size={12} />
+                                                <Edit2 size={12} />
                                             </button>
+                                            <button
+                                                onClick={() => requestDeleteLayer(asset.id, asset.name)}
+                                                className="p-1.5 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-500/10 transition-all"
+                                                title="Sil"
+                                            >
+                                                <Trash2 size={12} />
+                                            </button>
+                                        </>
+                                    )}
+                                    {asset.type === LayerType.GLB_UNCOORD && (
+                                        <>
+                                            {!readOnly && (
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        if (setPositioningLayerId) {
+                                                            setPositioningLayerId(positioningLayerId === asset.id ? null : asset.id);
+                                                        }
+                                                    }}
+                                                    className={`p-1.5 rounded-md transition-colors ${positioningLayerId === asset.id ? 'text-emerald-400 bg-white/10' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+                                                    title="Modelleme Ayarları"
+                                                >
+                                                    <MousePointer2 size={12} />
+                                                </button>
+                                            )}
                                             <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();
@@ -850,14 +858,16 @@ export const ProjectPanel: React.FC<Props> = ({
                             <h2 className="text-[15px] font-bold text-white tracking-tight">Projelerim</h2>
                             <p className="text-[10px] text-gray-400 font-medium uppercase tracking-widest">Çalışma Alanı</p>
                         </div>
-                        <Button
-                            size="sm"
-                            onClick={() => setIsCreating(!isCreating)}
-                            className="bg-[#06B6D4] hover:bg-[#0891B2] text-white shadow-lg shadow-cyan-500/20 flex items-center gap-2 px-4 h-9 rounded-xl transition-all border-none font-bold text-[12px]"
-                        >
-                            <Plus size={16} />
-                            <span>Yeni Proje</span>
-                        </Button>
+                        {!readOnly && (
+                            <Button
+                                size="sm"
+                                onClick={() => setIsCreating(!isCreating)}
+                                className="bg-[#06B6D4] hover:bg-[#0891B2] text-white shadow-lg shadow-cyan-500/20 flex items-center gap-2 px-4 h-9 rounded-xl transition-all border-none font-bold text-[12px]"
+                            >
+                                <Plus size={16} />
+                                <span>Yeni Proje</span>
+                            </Button>
+                        )}
                     </div>
                 </div>
 
@@ -953,7 +963,7 @@ export const ProjectPanel: React.FC<Props> = ({
                                                             </button>
                                                         );
                                                     })()}
-                                                    {onShareProject && (
+                                                    {!readOnly && onShareProject && (
                                                         <button
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
@@ -965,7 +975,7 @@ export const ProjectPanel: React.FC<Props> = ({
                                                             <Share2 size={14} />
                                                         </button>
                                                     )}
-                                                    {onOpenUpload && (
+                                                    {!readOnly && onOpenUpload && (
                                                         <button
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
@@ -977,13 +987,15 @@ export const ProjectPanel: React.FC<Props> = ({
                                                             <Upload size={14} />
                                                         </button>
                                                     )}
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); requestDeleteProject(project.id, project.name); }}
-                                                        className="p-1.5 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-500/10 transition"
-                                                        title="Projeyi Sil"
-                                                    >
-                                                        <Trash2 size={14} />
-                                                    </button>
+                                                    {!readOnly && (
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); requestDeleteProject(project.id, project.name); }}
+                                                            className="p-1.5 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-500/10 transition"
+                                                            title="Projeyi Sil"
+                                                        >
+                                                            <Trash2 size={14} />
+                                                        </button>
+                                                    )}
                                                 </div>
                                             ) : (
                                                 <ChevronRight size={16} className={`text-gray-600 transition-transform duration-300 ${isSelected ? 'rotate-90' : ''}`} />
@@ -1204,12 +1216,16 @@ export const ProjectPanel: React.FC<Props> = ({
                                                                                 <button onClick={() => onToggleLayer(measurement.id)} className={`p-1 px-1.5 transition-all ${measurement.visible ? 'text-white hover:text-white' : 'text-gray-500 hover:text-white'}`} title="Göster/Gizle">
                                                                                     {measurement.visible ? <Eye size={11} /> : <EyeOff size={11} />}
                                                                                 </button>
-                                                                                <button onClick={() => handleEditStart(measurement)} className="p-1 px-1.5 text-gray-500 hover:text-carta-gold-400 transition-all" title="Adlandır">
-                                                                                    <Edit2 size={11} />
-                                                                                </button>
-                                                                                <button onClick={() => requestDeleteLayer(measurement.id, measurement.name)} className="p-1 px-1.5 text-gray-500 hover:text-red-500 transition-all" title="Sil">
-                                                                                    <Trash2 size={11} />
-                                                                                </button>
+                                                                                {!readOnly && (
+                                                                                    <>
+                                                                                        <button onClick={() => handleEditStart(measurement)} className="p-1 px-1.5 text-gray-500 hover:text-carta-gold-400 transition-all" title="Adlandır">
+                                                                                            <Edit2 size={11} />
+                                                                                        </button>
+                                                                                        <button onClick={() => requestDeleteLayer(measurement.id, measurement.name)} className="p-1 px-1.5 text-gray-500 hover:text-red-500 transition-all" title="Sil">
+                                                                                            <Trash2 size={11} />
+                                                                                        </button>
+                                                                                    </>
+                                                                                )}
                                                                             </div>
                                                                         </div>
                                                                     </div>

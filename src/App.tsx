@@ -356,7 +356,7 @@ const App: React.FC = () => {
       */}
       {activePotreeLayer ? (
         <PotreeViewer
-          layer={activePotreeLayer}
+          layers={[activePotreeLayer]}
           onClose={() => setActivePotreeLayer(null)}
         />
       ) : (
@@ -488,7 +488,7 @@ const App: React.FC = () => {
       {/* Model Viewer Overlay */}
       {_activeModelLayer && (
         <UncoordinatedModelViewer
-          layer={_activeModelLayer}
+          layers={[_activeModelLayer]}
           onClose={() => _setActiveModelLayer(null)}
         />
       )}

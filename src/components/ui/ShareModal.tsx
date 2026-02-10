@@ -19,6 +19,12 @@ export const ShareModal: React.FC<Props> = ({ asset, onClose, onShare }) => {
   const handleShare = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+
+    if (pin.length !== 6) {
+      alert('PIN must be exactly 6 digits');
+      setIsLoading(false);
+      return;
+    }
     try {
       const link = await onShare(email, pin, duration);
       setGeneratedLink(link);
@@ -79,7 +85,7 @@ export const ShareModal: React.FC<Props> = ({ asset, onClose, onShare }) => {
                       className="w-full bg-gray-800 border border-gray-600 rounded-lg pl-9 p-2 text-sm text-white focus:border-blue-500 outline-none font-mono"
                       placeholder="123456"
                       value={pin}
-                      onChange={e => setPin(e.target.value)}
+                      onChange={e => setPin(e.target.value.replace(/\D/g, ''))}
                     />
                   </div>
                 </div>
