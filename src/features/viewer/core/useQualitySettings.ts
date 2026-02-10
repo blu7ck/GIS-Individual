@@ -51,7 +51,7 @@ export function useQualitySettings(viewer: Viewer | null, qualitySettings: Quali
                 scene.fog.enabled = false;
                 scene.highDynamicRange = false;
                 scene.globe.showGroundAtmosphere = false;
-                (scene as any).orderIndependentTranslucency = false;
+                try { (scene as any).orderIndependentTranslucency = false; } catch (_e) { /* getter-only in some Cesium versions */ }
                 scene.globe.baseColor = Color.BLUE;
                 scene.globe.show = true;
                 if (scene.skyBox) scene.skyBox.show = true;

@@ -46,7 +46,7 @@ export function useGeolocation(options: UseGeolocationOptions = {}) {
         error: null,
         isLoading: false,
         isTracking: false,
-        isSupported: typeof navigator !== 'undefined' && 'geolocation' in navigator,
+        isSupported: typeof navigator !== 'undefined' && 'geolocation' in navigator && (typeof window !== 'undefined' ? window.isSecureContext : true),
         permissionState: null,
     });
 
@@ -134,12 +134,15 @@ export function useGeolocation(options: UseGeolocationOptions = {}) {
         console.log('[Geolocation] getCurrentPosition called, isSupported:', state.isSupported);
 
         if (!state.isSupported) {
-            console.error('[Geolocation] Geolocation API not supported');
+            const isInsecure = typeof window !== 'undefined' && !window.isSecureContext;
+            console.error('[Geolocation]', isInsecure ? 'Requires HTTPS (secure context)' : 'Geolocation API not supported');
             setState(prev => ({
                 ...prev,
                 error: {
                     code: 0,
-                    message: 'Geolocation bu tarayıcıda desteklenmiyor.',
+                    message: isInsecure
+                        ? 'Konum hizmeti yalnızca HTTPS üzerinden çalışır. Lütfen güvenli bağlantı kullanın.'
+                        : 'Geolocation bu tarayıcıda desteklenmiyor.',
                     type: 'NOT_SUPPORTED',
                 },
             }));
@@ -173,12 +176,15 @@ export function useGeolocation(options: UseGeolocationOptions = {}) {
         console.log('[Geolocation] startTracking called, isSupported:', state.isSupported);
 
         if (!state.isSupported) {
-            console.error('[Geolocation] Geolocation API not supported');
+            const isInsecure = typeof window !== 'undefined' && !window.isSecureContext;
+            console.error('[Geolocation]', isInsecure ? 'Requires HTTPS (secure context)' : 'Geolocation API not supported');
             setState(prev => ({
                 ...prev,
                 error: {
                     code: 0,
-                    message: 'Geolocation bu tarayıcıda desteklenmiyor.',
+                    message: isInsecure
+                        ? 'Konum hizmeti yalnızca HTTPS üzerinden çalışır. Lütfen güvenli bağlantı kullanın.'
+                        : 'Geolocation bu tarayıcıda desteklenmiyor.',
                     type: 'NOT_SUPPORTED',
                 },
             }));

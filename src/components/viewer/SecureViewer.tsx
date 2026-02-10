@@ -168,7 +168,7 @@ export const SecureViewer: React.FC<Props> = ({ shareId, workerUrl }) => {
 
         // Mode Flags
         isSecureMode={true}
-        isViewerMode={true}
+        isViewerMode={false}
         sceneMode={sceneMode}
         setSceneMode={setSceneMode}
 
