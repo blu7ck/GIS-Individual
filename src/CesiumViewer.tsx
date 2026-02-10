@@ -457,7 +457,6 @@ const CesiumViewer: React.FC<Props> = React.memo(({
             <button
               onClick={() => {
                 finishCurrentMeasurement();
-                onExitMeasurement?.(); // Ensure exit immediately
               }}
               className="w-12 h-12 rounded-full bg-teal-500/90 hover:bg-teal-400 backdrop-blur-md text-white shadow-lg shadow-teal-500/20 transition-all duration-300 flex items-center justify-center hover:scale-110 active:scale-95 animate-in zoom-in spin-in-12 duration-300"
               title="Ölçümü Tamamla"

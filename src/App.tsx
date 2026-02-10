@@ -167,6 +167,7 @@ const App: React.FC = () => {
       setCachedMeasurements(prev => [...prev, newCached]);
       notify('Proje seçilmediği için ölçüm geçici olarak kaydedildi', 'warning');
       setPendingMeasurement(null);
+      setMeasurementMode(MeasurementMode.NONE);
       return;
     }
 
@@ -187,6 +188,9 @@ const App: React.FC = () => {
         if (res.data.data) {
           res.data.data.mode = pendingMeasurement.mode;
         }
+        // Strictly enforce visibility
+        res.data.visible = true;
+
         setAssets(prev => [...prev, res.data!]);
         setStorageRefreshKey(prev => prev + 1);
         notify('Ölçüm başarıyla kaydedildi', 'success');
@@ -195,6 +199,7 @@ const App: React.FC = () => {
       }
     }
     setPendingMeasurement(null);
+    setMeasurementMode(MeasurementMode.NONE);
   };
 
   // Quality Settings
@@ -272,6 +277,7 @@ const App: React.FC = () => {
       // 2. Persistence Update
       if (updates) {
         handleUpdateAssetMetadata(id, updates);
+        notify('Model ayarları güncellendi', 'success');
       }
     };
   }, [setAssets, handleUpdateAssetMetadata]);
@@ -460,7 +466,10 @@ const App: React.FC = () => {
       {/* Save Modal for Naming */}
       <SaveModal
         isOpen={!!pendingMeasurement}
-        onClose={() => setPendingMeasurement(null)}
+        onClose={() => {
+          setPendingMeasurement(null);
+          setMeasurementMode(MeasurementMode.NONE);
+        }}
         onSave={handleConfirmSave}
         defaultName={measurementMode.charAt(0) + measurementMode.slice(1).toLowerCase().replace('_', ' ')}
         measurementText={pendingMeasurement?.text || ''}
@@ -475,15 +484,29 @@ const App: React.FC = () => {
           onShare={executeShare}
         />
       )}
-      {sharingProject && (
-        <ShareProjectModal
-          project={sharingProject}
-          onClose={() => setSharingProject(null)}
-          onShare={executeProjectShare}
-          assets={assets.filter(a => a.project_id === sharingProject.id)}
-          measurements={[]}
-        />
-      )}
+      {sharingProject && (() => {
+        // Find measurement sub-folders for this project
+        const measurementFolderIds = projects
+          .filter(p => p.parent_project_id === sharingProject.id && p.is_measurements_folder)
+          .map(p => p.id);
+        // Get project assets (non-annotations)
+        const projectAssets = assets.filter(a =>
+          a.project_id === sharingProject.id && a.type !== LayerType.ANNOTATION
+        );
+        // Get measurements from sub-folders
+        const projectMeasurements = assets.filter(a =>
+          measurementFolderIds.includes(a.project_id) && a.type === LayerType.ANNOTATION
+        );
+        return (
+          <ShareProjectModal
+            project={sharingProject}
+            onClose={() => setSharingProject(null)}
+            onShare={executeProjectShare}
+            assets={projectAssets}
+            measurements={projectMeasurements}
+          />
+        );
+      })()}
 
       {/* Model Viewer Overlay */}
       {_activeModelLayer && (
