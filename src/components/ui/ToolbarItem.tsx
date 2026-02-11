@@ -26,7 +26,7 @@ export const ToolbarItem: React.FC<Props> = ({
 
     // Close when clicking outside
     useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
+        const handleClickOutside = (event: MouseEvent | TouchEvent) => {
             if (isOpen && ref.current && !ref.current.contains(event.target as Node)) {
                 onToggle();
             }

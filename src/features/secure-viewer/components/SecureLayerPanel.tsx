@@ -1,6 +1,5 @@
 import React from 'react';
-import { ChevronLeft, ChevronRight, LayoutTemplate, Box, Globe, Eye, EyeOff, MapPin, ChevronDown, ChevronUp, Trash2, Edit2, Download, ExternalLink, MousePointer2 } from 'lucide-react';
-import { Button } from '../../../components/common/Button';
+import { ChevronLeft, ChevronRight, LayoutTemplate, Box, Globe, Eye, EyeOff, ChevronDown, ChevronUp, ExternalLink, MousePointer2, Scan, Ruler } from 'lucide-react';
 import { AssetLayer, LayerType } from '../../../types';
 
 interface Props {
@@ -10,11 +9,6 @@ interface Props {
     panelOpen: boolean;
     setPanelOpen: (open: boolean) => void;
     activeTilesetId?: string | null;
-    positioningLayerId: string | null;
-    setPositioningLayerId: (id: string | null) => void;
-    onUpdatePosition: (id: string, lat: number, lng: number, height: number) => void;
-    onRenameLayer?: (id: string, name: string) => void;
-    onDeleteLayer?: (id: string) => void;
     onViewInViewer?: (layer: AssetLayer) => void;
 }
 
@@ -25,15 +19,18 @@ export const SecureLayerPanel: React.FC<Props> = ({
     panelOpen,
     setPanelOpen,
     activeTilesetId,
-    positioningLayerId,
-    setPositioningLayerId,
-    onUpdatePosition,
-    onRenameLayer,
-    onDeleteLayer,
     onViewInViewer
 }) => {
-    // Group layers by type/category
-    const mapLayers = layers.filter(l => l.type !== LayerType.ANNOTATION && l.type !== LayerType.GLB_UNCOORD);
+    // Group layers by type/category — separate point clouds and uncoordinated models
+    const mapLayers = layers.filter(l =>
+        l.type !== LayerType.ANNOTATION &&
+        l.type !== LayerType.GLB_UNCOORD &&
+        l.type !== LayerType.POTREE &&
+        l.type !== LayerType.LAS
+    );
+    const pointCloudLayers = layers.filter(l =>
+        l.type === LayerType.POTREE || l.type === LayerType.LAS
+    );
     const modelLayers = layers.filter(l => l.type === LayerType.GLB_UNCOORD);
     const annotationLayers = layers.filter(l => l.type === LayerType.ANNOTATION);
 
@@ -42,7 +39,8 @@ export const SecureLayerPanel: React.FC<Props> = ({
             case LayerType.TILES_3D: return <Box size={14} className="text-blue-400" />;
             case LayerType.KML: return <Globe size={14} className="text-emerald-400" />;
             case LayerType.GEOJSON: return <Globe size={14} className="text-amber-400" />;
-            case LayerType.GLB_UNCOORD: return <Box size={14} className="text-purple-400" />;
+            case LayerType.DXF: return <LayoutTemplate size={14} className="text-cyan-400" />;
+            case LayerType.SHP: return <LayoutTemplate size={14} className="text-orange-400" />;
             default: return <LayoutTemplate size={14} className="text-slate-400" />;
         }
     };
@@ -106,138 +104,66 @@ export const SecureLayerPanel: React.FC<Props> = ({
                         </div>
                     )}
 
-                    {/* 3D Models Section */}
+                    {/* Point Clouds Section */}
+                    {pointCloudLayers.length > 0 && (
+                        <div>
+                            <div className="px-2 py-1.5 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 mt-2">
+                                Point Clouds
+                            </div>
+                            <div className="space-y-1">
+                                {pointCloudLayers.map(layer => (
+                                    <div key={layer.id} className="group flex items-center p-2 rounded-lg transition-colors hover:bg-slate-800/50">
+                                        <div className="flex-1 min-w-0 flex items-center">
+                                            <Scan size={14} className="mr-2 text-green-400 shrink-0" />
+                                            <span className="text-sm font-medium text-slate-200 truncate">{layer.name}</span>
+                                        </div>
+                                        <button
+                                            className="ml-2 p-1.5 rounded-md bg-green-500/10 text-green-400 hover:bg-green-500 hover:text-white transition-colors text-xs font-medium px-2 flex items-center gap-1"
+                                            onClick={() => onViewInViewer && onViewInViewer(layer)}
+                                        >
+                                            <ExternalLink size={12} />
+                                            Potree Viewer
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 3D Models Section (View-Only) */}
                     {modelLayers.length > 0 && (
                         <div>
                             <div className="px-2 py-1.5 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 mt-2">
                                 3D Models
                             </div>
                             <div className="space-y-1">
-                                {modelLayers.map(layer => {
-                                    const isPositioning = positioningLayerId === layer.id;
-
-                                    return (
-                                        <div key={layer.id} className="flex flex-col">
-                                            <div className={`group flex items-center p-2 rounded-lg transition-colors hover:bg-slate-800/50 ${isPositioning ? 'bg-purple-900/20 border border-purple-500/30' : ''}`}>
-                                                <div
-                                                    className="flex-1 min-w-0 cursor-pointer flex items-center"
-                                                    onClick={(e) => onLayerClick(layer, e)}
-                                                >
-                                                    <Box size={14} className="mr-2 text-purple-400 shrink-0" />
-                                                    <span className="text-sm font-medium text-slate-200 truncate">{layer.name}</span>
-                                                </div>
-
-                                                <div className="flex items-center gap-1">
-                                                    <button
-                                                        className={`p-1.5 rounded-md transition-all ${isPositioning ? 'bg-purple-500 text-white' : 'text-slate-500 hover:text-white hover:bg-slate-700'}`}
-                                                        title="Positioning Settings"
-                                                        onClick={() => setPositioningLayerId(isPositioning ? null : layer.id)}
-                                                    >
-                                                        <MapPin size={14} />
-                                                    </button>
-                                                    <button
-                                                        className="p-1.5 rounded-md text-slate-500 hover:text-white hover:bg-slate-700"
-                                                        title="Rename Layer"
-                                                        onClick={() => {
-                                                            const newName = prompt('Enter new name:', layer.name);
-                                                            if (newName && onRenameLayer) onRenameLayer(layer.id, newName);
-                                                        }}
-                                                    >
-                                                        <Edit2 size={14} />
-                                                    </button>
-                                                    <a
-                                                        href={layer.url || layer.blobUrl}
-                                                        download={layer.name}
-                                                        className="p-1.5 rounded-md text-slate-500 hover:text-white hover:bg-slate-700"
-                                                        title="Download Model"
-                                                    >
-                                                        <Download size={14} />
-                                                    </a>
-                                                    <button
-                                                        className="p-1.5 rounded-md text-red-500/70 hover:text-red-400 hover:bg-red-500/10"
-                                                        title="Delete Layer"
-                                                        onClick={() => {
-                                                            if (confirm(`Are you sure you want to delete "${layer.name}"?`)) {
-                                                                if (onDeleteLayer) onDeleteLayer(layer.id);
-                                                            }
-                                                        }}
-                                                    >
-                                                        <Trash2 size={14} />
-                                                    </button>
-                                                    <button
-                                                        className="ml-2 p-1.5 rounded-md bg-purple-500/10 text-purple-400 hover:bg-purple-500 hover:text-white transition-colors text-xs font-medium px-2 flex items-center gap-1"
-                                                        onClick={() => onViewInViewer && onViewInViewer(layer)}
-                                                    >
-                                                        <ExternalLink size={12} />
-                                                        View
-                                                    </button>
-                                                </div>
-                                            </div>
-
-                                            {/* Placement Settings Panel */}
-                                            {isPositioning && (
-                                                <div className="mt-1 ml-2 p-3 bg-slate-800/50 rounded-lg border border-slate-700/50 space-y-3 animate-in fade-in slide-in-from-top-1 duration-200">
-                                                    <p className="text-[10px] font-bold text-purple-400 uppercase tracking-tight">Positioning Settings</p>
-
-                                                    <div className="grid grid-cols-2 gap-2">
-                                                        <div className="space-y-1">
-                                                            <label className="text-[9px] text-slate-500 uppercase">Latitude</label>
-                                                            <input
-                                                                type="number"
-                                                                step="any"
-                                                                className="w-full bg-slate-900 border border-slate-700 rounded px-1.5 py-1 text-xs text-white"
-                                                                value={layer.position?.lat || ''}
-                                                                onChange={(e) => onUpdatePosition(layer.id, parseFloat(e.target.value), layer.position?.lng || 0, layer.position?.height || 0)}
-                                                            />
-                                                        </div>
-                                                        <div className="space-y-1">
-                                                            <label className="text-[9px] text-slate-500 uppercase">Longitude</label>
-                                                            <input
-                                                                type="number"
-                                                                step="any"
-                                                                className="w-full bg-slate-900 border border-slate-700 rounded px-1.5 py-1 text-xs text-white"
-                                                                value={layer.position?.lng || ''}
-                                                                onChange={(e) => onUpdatePosition(layer.id, layer.position?.lat || 0, parseFloat(e.target.value), layer.position?.height || 0)}
-                                                            />
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="space-y-1">
-                                                        <label className="text-[9px] text-slate-500 uppercase">Height (Altitude)</label>
-                                                        <input
-                                                            type="number"
-                                                            step="any"
-                                                            className="w-full bg-slate-900 border border-slate-700 rounded px-1.5 py-1 text-xs text-white"
-                                                            value={layer.position?.height || 0}
-                                                            onChange={(e) => onUpdatePosition(layer.id, layer.position?.lat || 0, layer.position?.lng || 0, parseFloat(e.target.value))}
-                                                        />
-                                                    </div>
-
-                                                    <Button
-                                                        size="sm"
-                                                        className="w-full justify-center bg-purple-600 hover:bg-purple-500 text-white border-none py-1.5"
-                                                        onClick={() => {
-                                                            // Logic for map placement mode is already in SecureViewer
-                                                            // We just keep this panel open while map is active
-                                                        }}
-                                                    >
-                                                        <MousePointer2 size={12} className="mr-1.5" />
-                                                        Click on Map to Place
-                                                    </Button>
-                                                </div>
-                                            )}
+                                {modelLayers.map(layer => (
+                                    <div key={layer.id} className="group flex items-center p-2 rounded-lg transition-colors hover:bg-slate-800/50">
+                                        <div
+                                            className="flex-1 min-w-0 cursor-pointer flex items-center"
+                                            onClick={(e) => onLayerClick(layer, e)}
+                                        >
+                                            <Box size={14} className="mr-2 text-purple-400 shrink-0" />
+                                            <span className="text-sm font-medium text-slate-200 truncate">{layer.name}</span>
                                         </div>
-                                    );
-                                })}
+                                        <button
+                                            className="ml-2 p-1.5 rounded-md bg-purple-500/10 text-purple-400 hover:bg-purple-500 hover:text-white transition-colors text-xs font-medium px-2 flex items-center gap-1"
+                                            onClick={() => onViewInViewer && onViewInViewer(layer)}
+                                        >
+                                            <ExternalLink size={12} />
+                                            Görüntüle
+                                        </button>
+                                    </div>
+                                ))}
                             </div>
                         </div>
                     )}
 
-                    {/* Annotations Section */}
+                    {/* Measurements / Annotations Section (Read-Only) */}
                     {annotationLayers.length > 0 && (
                         <div>
                             <div className="px-2 py-1.5 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 mt-2">
-                                Annotations
+                                Ölçümler
                             </div>
                             <div className="space-y-1">
                                 {annotationLayers.map(layer => (
@@ -250,9 +176,12 @@ export const SecureLayerPanel: React.FC<Props> = ({
                                         </button>
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center text-sm font-medium text-slate-200 truncate">
-                                                <MousePointer2 size={14} className="mr-2 text-pink-400 shrink-0" />
+                                                <Ruler size={14} className="mr-2 text-pink-400 shrink-0" />
                                                 <span className="truncate">{layer.name}</span>
                                             </div>
+                                            {layer.data?.text && (
+                                                <p className="text-[10px] text-slate-500 ml-6 truncate mt-0.5">{layer.data.text}</p>
+                                            )}
                                         </div>
                                     </div>
                                 ))}

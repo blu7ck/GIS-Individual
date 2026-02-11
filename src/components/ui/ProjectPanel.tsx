@@ -509,6 +509,12 @@ export const ProjectPanel: React.FC<Props> = ({
                                         {asset.error_message || 'İşlem Hatası'}
                                     </span>
                                 )}
+                                {/* Show measurement text in readOnly mode */}
+                                {readOnly && asset.type === LayerType.ANNOTATION && (asset as any).data?.text && (
+                                    <span className="text-[9px] text-gray-500 truncate mt-0.5">
+                                        {(asset as any).data.text}
+                                    </span>
+                                )}
                             </div>
                         )}
                     </div>
@@ -535,7 +541,7 @@ export const ProjectPanel: React.FC<Props> = ({
                                 </button>
 
                                 <div className="hidden group-hover/asset:flex items-center ml-1 bg-black/40 rounded-lg border border-white/5 p-0.5 animate-in fade-in slide-in-from-right-2 duration-200">
-                                    {asset.type === LayerType.TILES_3D && (
+                                    {!readOnly && asset.type === LayerType.TILES_3D && (
                                         <button
                                             onClick={(e) => {
                                                 e.stopPropagation();
@@ -548,14 +554,15 @@ export const ProjectPanel: React.FC<Props> = ({
                                             <SlidersHorizontal size={12} />
                                         </button>
                                     )}
-                                    {/* ... more buttons ... */}
-                                    <button
-                                        onClick={(e) => { e.stopPropagation(); handleDownload(asset); }}
-                                        className="p-1.5 rounded-md text-gray-400 hover:text-white hover:bg-white/5 transition-all"
-                                        title="İndir"
-                                    >
-                                        <Download size={12} />
-                                    </button>
+                                    {!readOnly && (
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); handleDownload(asset); }}
+                                            className="p-1.5 rounded-md text-gray-400 hover:text-white hover:bg-white/5 transition-all"
+                                            title="İndir"
+                                        >
+                                            <Download size={12} />
+                                        </button>
+                                    )}
                                     {!readOnly && (
                                         <>
                                             <button
@@ -601,6 +608,18 @@ export const ProjectPanel: React.FC<Props> = ({
                                                 <ExternalLink size={12} />
                                             </button>
                                         </>
+                                    )}
+                                    {(asset.type === LayerType.POTREE || asset.type === LayerType.LAS) && (
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (onOpenModelViewer) onOpenModelViewer(asset);
+                                            }}
+                                            className="p-1.5 rounded-md text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
+                                            title="Potree Viewer'da Göster"
+                                        >
+                                            <ExternalLink size={12} />
+                                        </button>
                                     )}
                                 </div>
                             </div>

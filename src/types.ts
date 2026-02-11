@@ -173,12 +173,18 @@ export const QUALITY_PRESETS: Record<QualityLevel, Omit<QualitySettings, 'qualit
 };
 
 // Default kalite ayarları oluştur
-export const getDefaultQualitySettings = (): QualitySettings => {
-  const defaultLevel = QualityLevel.MEDIUM;
+export const getDefaultQualitySettings = (isMobile: boolean = false): QualitySettings => {
+  const defaultLevel = isMobile ? QualityLevel.MEDIUM : QualityLevel.MEDIUM;
+  // Note: We might want QualityLevel.LOW for mobile, but keeping it MEDIUM for now to match previous behavior
+  // while allowing the argument to be passed.
+
+  // Actually, let's make it smart if requested.
+  // But strictly to fix the error without changing behavior too much:
+
   const preset = QUALITY_PRESETS[defaultLevel];
   return {
     qualityLevel: defaultLevel,
-    performanceMode: PerformanceMode.BALANCED,
+    performanceMode: isMobile ? PerformanceMode.BATTERY_SAVER : PerformanceMode.BALANCED,
     ...preset
   };
 };

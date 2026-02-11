@@ -1,12 +1,11 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, Suspense } from 'react';
 import * as Cesium from 'cesium';
 import CesiumViewer from '../../CesiumViewer';
 import { EngineeringLayout } from '../../components/layout/EngineeringLayout';
-import { PotreeViewer } from '../../features/viewer/components/PotreeViewer';
-import { UncoordinatedModelViewer } from '../../components/viewer/UncoordinatedModelViewer';
 import { useSecureAuth } from '../../features/secure-viewer/hooks/useSecureAuth';
 import { SecureLoginForm as LoginForm } from '../../features/secure-viewer/components/SecureLoginForm';
 import { SaveModal } from '../../components/ui/SaveModal';
+import { CheckCircle, Loader2 } from 'lucide-react';
 
 import type { PopupType } from '../../hooks/useUIState';
 import {
@@ -17,9 +16,15 @@ import {
   SceneViewMode,
   MeasurementMode,
   AssetStatus,
+  QualityLevel,
+  PerformanceMode,
   getDefaultQualitySettings,
 } from '../../types';
 import { useGeolocation } from '../../hooks/useGeolocation';
+
+// Lazy-load heavy viewer components for better initial load performance
+const PotreeViewer = React.lazy(() => import('../../features/viewer/components/PotreeViewer').then(m => ({ default: m.PotreeViewer })));
+const UncoordinatedModelViewer = React.lazy(() => import('../../components/viewer/UncoordinatedModelViewer').then(m => ({ default: m.UncoordinatedModelViewer })));
 
 const SHARED_PROJECT_ID = 'shared-project';
 
@@ -43,14 +48,24 @@ export const SecureViewer: React.FC<Props> = ({ shareId, workerUrl }) => {
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
 
   // Viewer Mode & Overlays
-  const [viewMode, setViewMode] = useState<'map' | 'potree' | 'model'>('map');
+  const [viewMode, setViewMode] = useState<'map' | 'potree' | 'model' | 'done'>('map');
   const [activePotreeLayerId, setActivePotreeLayerId] = useState<string | null>(null);
   const [activeModelLayerId, setActiveModelLayerId] = useState<string | null>(null);
 
   // Map State
   const [mapType, setMapType] = useState<MapType>(MapType.SATELLITE);
   const [sceneMode, setSceneMode] = useState<SceneViewMode>(SceneViewMode.SCENE3D);
-  const [qualitySettings, setQualitySettings] = useState(() => getDefaultQualitySettings());
+  const [qualitySettings, setQualitySettings] = useState(() => ({
+    ...getDefaultQualitySettings(),
+    qualityLevel: QualityLevel.LOW,
+    performanceMode: PerformanceMode.BALANCED,
+    maximumScreenSpaceError: 16,
+    tileCacheSize: 200,
+    textureCacheSize: 64,
+    cacheBytes: 32 * 1024 * 1024,
+    skipLevels: 4,
+    baseScreenSpaceError: 4096,
+  }));
   const [measurementMode, setMeasurementMode] = useState<MeasurementMode>(MeasurementMode.NONE);
 
   // Cesium Viewer Instance (needed for compass, status bar, etc.)
@@ -62,7 +77,6 @@ export const SecureViewer: React.FC<Props> = ({ shareId, workerUrl }) => {
 
   // UI State
   const [activePopup, setActivePopup] = useState<PopupType>('none');
-  const [isPlacingOnMap, setIsPlacingOnMap] = useState<string | null>(null);
 
   // Measurement Caching (session-only, not persisted)
   const [pendingMeasurement, setPendingMeasurement] = useState<{ text: string; geometry: any; mode: string } | null>(null);
@@ -118,6 +132,19 @@ export const SecureViewer: React.FC<Props> = ({ shareId, workerUrl }) => {
     layers.filter(l => l.type === LayerType.GLB_UNCOORD),
     [layers]);
 
+  // Detect whether this is a standalone viewer (no map data)
+  const isStandaloneViewer = useMemo(() => {
+    const mapAssets = layers.filter(l =>
+      l.type === LayerType.TILES_3D ||
+      l.type === LayerType.GEOJSON ||
+      l.type === LayerType.KML ||
+      l.type === LayerType.DXF ||
+      l.type === LayerType.SHP ||
+      (l.type === LayerType.GLB_UNCOORD && l.position)
+    );
+    return mapAssets.length === 0;
+  }, [layers]);
+
   // --- Memoized Handlers (mirror App.tsx patterns) ---
 
   const handleMouseMove = useMemo(() => {
@@ -170,10 +197,11 @@ export const SecureViewer: React.FC<Props> = ({ shareId, workerUrl }) => {
   const handleVerifyPin = async (pin: string): Promise<boolean> => {
     const loadedLayers = await handleUnlock(pin);
     if (loadedLayers) {
-      // Override project_id to match our shared project so ProjectPanel can see them
+      // Override project_id and make all layers visible
       const normalizedLayers = loadedLayers.map(l => ({
         ...l,
         project_id: SHARED_PROJECT_ID,
+        visible: true,
       }));
       setLayers(normalizedLayers);
       setIsAuthenticated(true);
@@ -181,11 +209,14 @@ export const SecureViewer: React.FC<Props> = ({ shareId, workerUrl }) => {
 
       // --- Smart Auto-Open Logic ---
       const pcs = normalizedLayers.filter(l => l.type === LayerType.POTREE || l.type === LayerType.LAS);
-      const mdls = normalizedLayers.filter(l => l.type === LayerType.GLB_UNCOORD);
+      const mdls = normalizedLayers.filter(l => l.type === LayerType.GLB_UNCOORD && !l.position);
       const mapAssets = normalizedLayers.filter(l =>
         l.type === LayerType.TILES_3D ||
         l.type === LayerType.GEOJSON ||
-        l.type === LayerType.KML
+        l.type === LayerType.KML ||
+        l.type === LayerType.DXF ||
+        l.type === LayerType.SHP ||
+        (l.type === LayerType.GLB_UNCOORD && l.position)
       );
 
       if (pcs.length > 0 && mdls.length === 0 && mapAssets.length === 0) {
@@ -196,9 +227,9 @@ export const SecureViewer: React.FC<Props> = ({ shareId, workerUrl }) => {
         if (mdls[0]) setActiveModelLayerId(mdls[0].id);
       } else {
         setViewMode('map');
-        const firstMapAsset = mapAssets[0];
-        if (mapAssets.length === 1 && firstMapAsset?.position) {
-          setTimeout(() => setFlyToLayerId(firstMapAsset.id), 1000);
+        // Delayed fly-to to allow CesiumViewer to initialize and load assets
+        if (mapAssets.length > 0 && mapAssets[0]) {
+          setTimeout(() => setFlyToLayerId(mapAssets[0]!.id), 2500);
         }
       }
 
@@ -224,13 +255,34 @@ export const SecureViewer: React.FC<Props> = ({ shareId, workerUrl }) => {
     if (layer.type === LayerType.POTREE || layer.type === LayerType.LAS) {
       setViewMode('potree');
       setActivePotreeLayerId(layer.id);
-    } else if (layer.type === LayerType.GLB_UNCOORD) {
+    } else if (layer.type === LayerType.GLB_UNCOORD && !layer.position) {
       setViewMode('model');
       setActiveModelLayerId(layer.id);
-    } else if (layer.position) {
+    } else {
+      // All map-rendered layers: KML, GeoJSON, DXF, SHP, 3DTiles, coordinated GLB
       setFlyToLayerId(id);
     }
   }, [allLayers]);
+
+  // Open a layer in its dedicated viewer (PotreeViewer or ModelViewer)
+  const handleViewInViewer = useCallback((layer: AssetLayer) => {
+    if (layer.type === LayerType.POTREE || layer.type === LayerType.LAS) {
+      setViewMode('potree');
+      setActivePotreeLayerId(layer.id);
+    } else if (layer.type === LayerType.GLB_UNCOORD) {
+      setViewMode('model');
+      setActiveModelLayerId(layer.id);
+    }
+  }, []);
+
+  // Handle standalone viewer close — show "done" screen instead of empty map
+  const handleViewerClose = useCallback(() => {
+    if (isStandaloneViewer) {
+      setViewMode('done');
+    } else {
+      setViewMode('map');
+    }
+  }, [isStandaloneViewer]);
 
   const handleToggleAllLayers = useCallback((_projectId: string, visible: boolean) => {
     setLayers(prev => prev.map(l => ({ ...l, visible })));
@@ -251,6 +303,29 @@ export const SecureViewer: React.FC<Props> = ({ shareId, workerUrl }) => {
         error={error}
         onVerifyPin={handleVerifyPin}
       />
+    );
+  }
+
+  // --- "Görüntüleme Tamamlandı" Screen for Standalone viewers ---
+  if (viewMode === 'done') {
+    return (
+      <div className="relative w-full h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
+        <div className="text-center max-w-md mx-auto p-8">
+          <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-emerald-500/10 flex items-center justify-center">
+            <CheckCircle size={32} className="text-emerald-400" />
+          </div>
+          <h2 className="text-2xl font-bold text-white mb-3">Görüntüleme Tamamlandı</h2>
+          <p className="text-slate-400 mb-6 text-sm leading-relaxed">
+            Paylaşılan içerik başarıyla görüntülendi. Bu sekmeyi kapatabilirsiniz.
+          </p>
+          <button
+            onClick={() => window.close()}
+            className="px-6 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm font-medium transition-colors"
+          >
+            Sekmeyi Kapat
+          </button>
+        </div>
+      </div>
     );
   }
 
@@ -282,10 +357,7 @@ export const SecureViewer: React.FC<Props> = ({ shareId, workerUrl }) => {
         onToggleAllLayers={handleToggleAllLayers}
 
         // Asset Actions
-        onOpenModelViewer={(layer) => {
-          setViewMode('model');
-          setActiveModelLayerId(layer.id);
-        }}
+        onOpenModelViewer={handleViewInViewer}
 
         // Upload (Disabled in secure mode)
         onUpload={() => { }}
@@ -320,11 +392,11 @@ export const SecureViewer: React.FC<Props> = ({ shareId, workerUrl }) => {
         cameraHeight={cameraHeight}
         viewer={cesiumViewerInstance}
 
-        // Positioning
+        // Positioning (disabled in secure mode)
         positioningLayerId={null}
         setPositioningLayerId={() => { }}
-        isPlacingOnMap={isPlacingOnMap}
-        setIsPlacingOnMap={setIsPlacingOnMap}
+        isPlacingOnMap={null}
+        setIsPlacingOnMap={() => { }}
       >
         <CesiumViewer
           className="w-full h-full"
@@ -368,21 +440,33 @@ export const SecureViewer: React.FC<Props> = ({ shareId, workerUrl }) => {
         description="Bu ölçüm oturum süresince tarayıcı belleğinde tutulacaktır."
       />
 
-      {/* Overlays for different View Modes */}
+      {/* Overlays for different View Modes — Lazy loaded with Suspense */}
       {viewMode === 'potree' && (
-        <PotreeViewer
-          layers={pointCloudLayers}
-          initialLayerId={activePotreeLayerId || undefined}
-          onClose={() => setViewMode('map')}
-        />
+        <Suspense fallback={
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black">
+            <Loader2 className="w-8 h-8 text-white animate-spin" />
+          </div>
+        }>
+          <PotreeViewer
+            layers={pointCloudLayers}
+            initialLayerId={activePotreeLayerId || undefined}
+            onClose={handleViewerClose}
+          />
+        </Suspense>
       )}
 
       {viewMode === 'model' && (
-        <UncoordinatedModelViewer
-          layers={modelLayers}
-          initialLayerId={activeModelLayerId || undefined}
-          onClose={() => setViewMode('map')}
-        />
+        <Suspense fallback={
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black">
+            <Loader2 className="w-8 h-8 text-white animate-spin" />
+          </div>
+        }>
+          <UncoordinatedModelViewer
+            layers={modelLayers}
+            initialLayerId={activeModelLayerId || undefined}
+            onClose={handleViewerClose}
+          />
+        </Suspense>
       )}
     </div>
   );

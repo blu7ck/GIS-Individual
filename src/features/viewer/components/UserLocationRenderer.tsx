@@ -83,12 +83,6 @@ export const UserLocationRenderer: React.FC<UserLocationRendererProps> = ({
     useEffect(() => {
         if (flyToUserLocation && flyToUserLocation > 0 && userLocation && viewer && !viewer.isDestroyed()) {
             try {
-                const position = Cesium.Cartesian3.fromDegrees(
-                    userLocation.lng,
-                    userLocation.lat,
-                    1000 // Default height
-                );
-
                 viewer.camera.flyTo({
                     destination: Cesium.Cartesian3.fromDegrees(
                         userLocation.lng,

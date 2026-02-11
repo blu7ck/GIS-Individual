@@ -37,7 +37,7 @@ export const MapControls: React.FC<Props> = ({
   // Close on click outside
   useEffect(() => {
     if (!isOpen) return;
-    const handleClick = (e: MouseEvent) => {
+    const handleClick = (e: Event) => {
       if (
         panelRef.current && !panelRef.current.contains(e.target as Node) &&
         triggerRef.current && !triggerRef.current.contains(e.target as Node)
