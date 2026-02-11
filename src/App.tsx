@@ -90,7 +90,8 @@ const App: React.FC = () => {
     setSelectedProjectId,
     handleCreateProject,
     handleDeleteProject,
-    handleUpdateAssetMetadata
+    handleUpdateAssetMetadata,
+    handleRenameAsset // Used for renaming assets
   } = useProjectData(user, storageConfig, notify, storageRefreshKey);
 
   // 5. Feature Hooks
@@ -271,16 +272,20 @@ const App: React.FC = () => {
   // Update asset handler (rename, height offset, scale, position)
   const handleUpdateAsset = useMemo(() => {
     return (id: string, newName: string, updates?: { heightOffset?: number; scale?: number; offsetX?: number; offsetY?: number; rotation?: number; position?: { lat: number; lng: number; height: number } }) => {
-      // 1. Local Update
+      // 1. Local Update (Optimistic)
       setAssets(prev => prev.map(a => a.id === id ? { ...a, name: newName, ...updates } : a));
 
-      // 2. Persistence Update
+      // 2. Persistence Update - Metadata
       if (updates) {
         handleUpdateAssetMetadata(id, updates);
         notify('Model ayarları güncellendi', 'success');
       }
+      // 3. Persistence Update - Rename
+      else if (newName) {
+        handleRenameAsset(id, newName);
+      }
     };
-  }, [setAssets, handleUpdateAssetMetadata]);
+  }, [setAssets, handleUpdateAssetMetadata, handleRenameAsset]);
 
   // Toggle all layers in a project
   const handleToggleAllLayersInProject = useMemo(() => {

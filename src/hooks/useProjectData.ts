@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Project, AssetLayer, StorageConfig } from '../types';
 import { createProject, deleteProject, fetchProjects } from '../services/projectService';
-import { fetchAssets, updateAssetMetadata } from '../services/assetService';
+import { fetchAssets, updateAssetMetadata, renameAsset } from '../services/assetService';
 
 
 interface User {
@@ -83,6 +83,16 @@ export function useProjectData(user: User | null, storageConfig: StorageConfig |
         }
     };
 
+    const handleRenameAsset = async (assetId: string, newName: string) => {
+        const result = await renameAsset(assetId, newName, storageConfig);
+        if (result.success) {
+            setAssets(prev => prev.map(a => a.id === assetId ? { ...a, name: newName } : a));
+            notify('Asset renamed', 'success');
+        } else {
+            notify(result.error || 'Failed to rename asset', 'error');
+        }
+    };
+
     return {
         projects,
         setProjects,
@@ -92,6 +102,7 @@ export function useProjectData(user: User | null, storageConfig: StorageConfig |
         setSelectedProjectId,
         handleCreateProject,
         handleDeleteProject,
-        handleUpdateAssetMetadata
+        handleUpdateAssetMetadata,
+        handleRenameAsset
     };
 }
