@@ -1,19 +1,17 @@
 import {
     Cesium3DTileset,
     Viewer,
-    Cartographic,
     Cartesian3,
     Matrix4,
-    defined,
-    EllipsoidTerrainProvider,
-    sampleTerrainMostDetailed
+    defined
 } from 'cesium';
 import { logger } from '../../../../utils/logger';
 
 /**
- * Production-ready ground clamping for 3D Tilesets.
- * Samples terrain height and adjusts tileset to sit on ground.
- * Uses exponential backoff for reliable bounding sphere availability.
+ * Initializes tileset metadata for height/scale adjustments.
+ * Caches center position and base matrix for use by applyTilesetTransform.
+ * Does NOT reposition the tileset — georeferenced tilesets keep their original position.
+ * Uses exponential backoff to wait for bounding sphere availability.
  */
 export async function clampTilesetToGround(
     tileset: Cesium3DTileset & { _fixurelabsClampedToGround?: boolean },
@@ -39,14 +37,6 @@ export async function clampTilesetToGround(
         await new Promise(resolve => setTimeout(resolve, retryDelay));
 
         if (!viewer || viewer.isDestroyed()) return;
-        const scene = viewer.scene;
-        if (!scene || scene.isDestroyed()) return;
-
-        // Skip if no real terrain
-        const terrainProvider = scene.terrainProvider;
-        if (!terrainProvider || terrainProvider instanceof EllipsoidTerrainProvider) {
-            return;
-        }
 
         // Get bounding sphere — retry if not yet available
         const boundingSphere = tileset.boundingSphere;
@@ -58,83 +48,19 @@ export async function clampTilesetToGround(
         }
 
         const center = boundingSphere.center;
-        const centerCartographic = Cartographic.fromCartesian(center);
 
-        // Sample terrain height at center point
-        let terrainHeight: number;
-        try {
-            const updatedPositions = await sampleTerrainMostDetailed(
-                terrainProvider,
-                [centerCartographic]
-            );
+        // Cache the current modelMatrix as the stable base for height/scale adjustments
+        ts._fixurelabsBaseMatrix = Matrix4.clone(tileset.modelMatrix);
 
-            if (!updatedPositions || updatedPositions.length === 0) {
-                throw new Error('Terrain sampling returned empty results');
-            }
-            terrainHeight = updatedPositions[0]?.height ?? 0;
-            if (isNaN(terrainHeight)) {
-                throw new Error('Invalid terrain height');
-            }
-        } catch (error) {
-            if (retryCount < MAX_RETRIES) {
-                await new Promise(resolve => setTimeout(resolve, retryDelay));
-                return clampTilesetToGround(tileset, viewer, retryCount + 1);
-            }
-            return;
-        }
-
-        // Calculate offset: terrain height minus tileset bottom
-        const tilesetMinHeight = centerCartographic.height - boundingSphere.radius;
-        const heightOffset = terrainHeight - tilesetMinHeight;
-
-        // Skip insignificant adjustments
-        if (Math.abs(heightOffset) < 0.1) {
-            ts._fixurelabsClampedToGround = true;
-            return;
-        }
-
-        // Get the up direction (surface normal) at the center point
-        const upVector = Cartographic.toCartesian(centerCartographic);
-        const surfaceNormal = Cartesian3.normalize(upVector, new Cartesian3());
-
-        // Scale surface normal by offset
-        const worldTranslation = Cartesian3.multiplyByScalar(
-            surfaceNormal, heightOffset, new Cartesian3()
-        );
-        const translationMatrix = Matrix4.fromTranslation(worldTranslation, new Matrix4());
-
-        // Get current model matrix as base
-        const currentMatrix = tileset.modelMatrix
-            ? Matrix4.clone(tileset.modelMatrix)
-            : Matrix4.IDENTITY.clone();
-
-        // Apply: translation * currentMatrix
-        const clampedMatrix = Matrix4.multiply(
-            translationMatrix, currentMatrix, new Matrix4()
-        );
-
-        // Always use modelMatrix (stable for both mobile and desktop)
-        tileset.modelMatrix = clampedMatrix;
-
-        // Store base matrix for subsequent height/scale adjustments
-        ts._fixurelabsBaseMatrix = Matrix4.clone(clampedMatrix);
-
-        // Store anchor position for height direction calculations
-        const anchorPosition = Matrix4.getTranslation(clampedMatrix, new Cartesian3());
-        ts._fixurelabsAnchorPosition = Cartesian3.clone(anchorPosition);
+        // Cache anchor position for surface normal direction
+        ts._fixurelabsAnchorPosition = Cartesian3.clone(center);
 
         ts._fixurelabsClampedToGround = true;
 
-        logger.info(`[Tileset] Ground clamped. Offset: ${heightOffset.toFixed(2)}m`);
-
-        // Re-apply any existing height/scale params on top of new base
-        const params = ts._fixurelabsParams || { height: 0, scale: 1.0 };
-        if (params.height !== 0 || params.scale !== 1.0) {
-            applyTilesetTransform(tileset, params.height, params.scale);
-        }
+        logger.info(`[Tileset] Metadata cached for ${ts.url || 'tileset'}. Ready for height/scale adjustments.`);
 
     } catch (error) {
-        logger.error('Error clamping 3D Tiles to ground', error);
+        logger.error('Error initializing tileset metadata', error);
     }
 }
 
