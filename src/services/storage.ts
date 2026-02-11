@@ -172,7 +172,7 @@ export const uploadFolderToR2 = async (files: FileList, type: LayerType, config:
   const timestamp = Date.now();
   // Get root folder name or default - using safe helper function
   const rootFolderName = getFolderNameFromFileList(files);
-  const uploadPrefix = `uploads/${type === LayerType.POTREE ? 'pointclouds' : 'tilesets'}/${timestamp}-${rootFolderName}`;
+  const uploadPrefix = `uploads/${type === LayerType.POTREE ? 'pointclouds' : type === LayerType.GLB_UNCOORD ? 'models' : 'tilesets'}/${timestamp}-${rootFolderName}`;
 
   let mainFileKey = "";
 
@@ -218,6 +218,13 @@ export const uploadFolderToR2 = async (files: FileList, type: LayerType, config:
             mainFileKey = s3Key;
           }
         }
+      } else if (type === LayerType.GLB_UNCOORD) {
+        if (lowerName.endsWith('.gltf') || lowerName.endsWith('.glb')) {
+          // Prefer .gltf
+          if (!mainFileKey || lowerName.endsWith('.gltf')) {
+            mainFileKey = s3Key;
+          }
+        }
       }
 
       try {
@@ -227,6 +234,10 @@ export const uploadFolderToR2 = async (files: FileList, type: LayerType, config:
           mainFileKey = publicUrl;
         } else if (type === LayerType.POTREE && (lowerName === 'cloud.js' || lowerName === 'metadata.json' || lowerName === 'ept.json')) {
           if (!mainFileKey || lowerName === 'cloud.js' || !mainFileKey.includes('cloud.js')) {
+            mainFileKey = publicUrl;
+          }
+        } else if (type === LayerType.GLB_UNCOORD && (lowerName.endsWith('.gltf') || lowerName.endsWith('.glb'))) {
+          if (!mainFileKey || lowerName.endsWith('.gltf') || !mainFileKey.includes('.gltf')) {
             mainFileKey = publicUrl;
           }
         }
@@ -258,8 +269,10 @@ export const uploadFolderToR2 = async (files: FileList, type: LayerType, config:
 
     if (type === LayerType.TILES_3D) {
       throw new Error("No tileset.json found in the selected folder.");
-    } else {
+    } else if (type === LayerType.POTREE) {
       throw new Error("Invalid Octree folder. Missing cloud.js or metadata.json.");
+    } else {
+      throw new Error("No .gltf or .glb file found in the selected folder.");
     }
   }
 

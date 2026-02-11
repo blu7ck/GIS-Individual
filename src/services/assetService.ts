@@ -203,15 +203,15 @@ export async function uploadFolderAsset(
     try {
         if (signal?.aborted) throw new Error('Upload cancelled');
 
-        // Only allow 3D Tiles and Potree for folder uploads
-        if (type !== LayerType.TILES_3D && type !== LayerType.POTREE) {
+        // Only allow 3D Tiles and Potree and GLB for folder uploads
+        if (type !== LayerType.TILES_3D && type !== LayerType.POTREE && type !== LayerType.GLB_UNCOORD) {
             return { success: false, error: 'Invalid folder upload type' };
         }
 
         const finalUrl = await uploadFolderToR2(files, type, config, onProgress, signal);
 
         // Extract folder name safely
-        let folderName = type === LayerType.POTREE ? 'Point Cloud' : '3D Tileset';
+        let folderName = type === LayerType.POTREE ? 'Point Cloud' : type === LayerType.GLB_UNCOORD ? '3D Model' : '3D Tileset';
         const firstFile = files[0];
         if (firstFile && 'webkitRelativePath' in firstFile) {
             const relativePath = (firstFile as File & { webkitRelativePath: string }).webkitRelativePath;

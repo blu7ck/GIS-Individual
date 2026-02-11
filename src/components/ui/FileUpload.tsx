@@ -281,7 +281,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
 
         <div className="flex-1 flex flex-col justify-center">
           {/* Complex Upload (Folder/URL) */}
-          {(selectedType === LayerType.TILES_3D || selectedType === LayerType.POTREE) ? (
+          {(selectedType === LayerType.TILES_3D || selectedType === LayerType.POTREE || selectedType === LayerType.GLB_UNCOORD) ? (
             <div className="space-y-6">
               <div className={`border border-dashed rounded-xl p-8 bg-white/5 ${currentTheme.border}`}>
                 <p className={`text-xs font-bold mb-4 flex items-center gap-2 ${currentTheme.text}`}>
@@ -292,8 +292,27 @@ export const FileUpload: React.FC<FileUploadProps> = ({
                   {isUploading ? <Loader2 size={18} className="animate-spin mr-3" /> : <FolderUp size={18} className="mr-3" />}
                   <span className="uppercase tracking-widest font-black text-xs">{isUploading ? 'Yükleniyor...' : 'Klasör Seç'}</span>
                 </Button>
-                <p className="text-[10px] text-gray-500 mt-4 text-center">Klasörün {selectedType === LayerType.POTREE ? 'metadata.json' : 'tileset.json'} içerdiğinden emin olun.</p>
+                <p className="text-[10px] text-gray-500 mt-4 text-center">Klasörün {selectedType === LayerType.POTREE ? 'metadata.json' : selectedType === LayerType.GLB_UNCOORD ? '.gltf (ve bin/textures)' : 'tileset.json'} içerdiğinden emin olun.</p>
               </div>
+
+              {/* Single File Upload Option for GLB */}
+              {selectedType === LayerType.GLB_UNCOORD && (
+                <>
+                  <div className="relative flex items-center">
+                    <div className="flex-grow border-t border-white/5"></div>
+                    <span className="mx-4 text-[10px] text-white/20 font-black tracking-widest uppercase">VEYA</span>
+                    <div className="flex-grow border-t border-white/5"></div>
+                  </div>
+
+                  <div>
+                    <input type="file" onChange={handleFileChange} accept=".glb,.gltf" className="hidden" id="glb-single-file" disabled={isUploading} />
+                    <label htmlFor="glb-single-file" className={`w-full flex items-center justify-center p-4 rounded-xl border border-dashed border-white/10 bg-white/5 hover:bg-white/10 cursor-pointer gap-3 text-gray-400 hover:text-white transition-all ${isUploading ? 'pointer-events-none opacity-50' : ''}`}>
+                      <Upload size={18} />
+                      <span className="uppercase tracking-widest font-bold text-xs">Tek Dosya (.glb) Yükle</span>
+                    </label>
+                  </div>
+                </>
+              )}
 
               <div className="relative flex items-center">
                 <div className="flex-grow border-t border-white/5"></div>

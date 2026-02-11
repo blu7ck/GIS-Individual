@@ -935,6 +935,8 @@ export const ProjectPanel: React.FC<Props> = ({
                                 !p.linked_asset_id &&
                                 assets.some(a => a.project_id === p.id)
                             );
+                            // Direct ANNOTATION assets on this project (for SecureViewer cached measurements)
+                            const directAnnotations = assets.filter(a => a.project_id === project.id && a.type === LayerType.ANNOTATION);
 
                             return (
                                 <div key={project.id} className="rounded-lg overflow-hidden border border-transparent transition-all">
@@ -1250,6 +1252,62 @@ export const ProjectPanel: React.FC<Props> = ({
                                                                     </div>
                                                                 ));
                                                             })}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            {/* Direct Annotations (SecureViewer cached measurements) */}
+                                            {measurementsSubProjects.length === 0 && directAnnotations.length > 0 && (
+                                                <div className="space-y-1">
+                                                    <div
+                                                        onClick={() => toggleCategory(project.id, 'measurements')}
+                                                        className="flex items-center p-2 cursor-pointer hover:bg-white/5 rounded-lg transition-colors group/cat"
+                                                    >
+                                                        <ChevronRight
+                                                            size={12}
+                                                            className={`mr-2 text-gray-600 transition-transform duration-300 ${isCategoryExpanded(project.id, 'measurements') ? 'rotate-90' : ''}`}
+                                                        />
+                                                        <Folder size={14} className="mr-2 text-gray-500 group-hover/cat:text-gray-300 transition-colors" />
+                                                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest group-hover/cat:text-gray-300 transition-colors">ÖLÇÜM VE ANALİZLER</span>
+                                                    </div>
+                                                    {isCategoryExpanded(project.id, 'measurements') && (
+                                                        <div className="pl-4 space-y-1 mt-1">
+                                                            {directAnnotations.map(measurement => (
+                                                                <div key={measurement.id} className="group/measurement flex items-center justify-between p-2 rounded-xl border border-transparent hover:border-white/5 hover:bg-white/[0.03] transition-all duration-300">
+                                                                    <div className="flex items-center overflow-hidden flex-1 min-w-0">
+                                                                        <div
+                                                                            className="p-1.5 rounded-lg mr-3 flex-shrink-0 transition-colors"
+                                                                            style={{
+                                                                                backgroundColor: `${getMeasurementColor((measurement as any).data?.mode)}20`,
+                                                                                color: getMeasurementColor((measurement as any).data?.mode)
+                                                                            }}
+                                                                        >
+                                                                            <SlidersHorizontal size={14} />
+                                                                        </div>
+                                                                        <span
+                                                                            className={`text-[11px] font-bold truncate transition-colors cursor-pointer ${measurement.visible ? '' : 'text-gray-500 opacity-50'}`}
+                                                                            style={measurement.visible ? { color: getMeasurementColor((measurement as any).data?.mode) } : {}}
+                                                                            title={measurement.name}
+                                                                            onClick={() => handleFocus(measurement.id)}
+                                                                        >
+                                                                            {measurement.name}
+                                                                        </span>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-1 ml-2 opacity-0 group-hover/measurement:opacity-100 transition-opacity">
+                                                                        <div className="flex items-center bg-black/40 rounded-lg border border-white/5 p-0.5">
+                                                                            <button onClick={() => onToggleLayer(measurement.id)} className={`p-1 px-1.5 transition-all ${measurement.visible ? 'text-white hover:text-white' : 'text-gray-500 hover:text-white'}`} title="Göster/Gizle">
+                                                                                {measurement.visible ? <Eye size={11} /> : <EyeOff size={11} />}
+                                                                            </button>
+                                                                            {!readOnly && (
+                                                                                <button onClick={() => requestDeleteLayer(measurement.id, measurement.name)} className="p-1 px-1.5 text-gray-500 hover:text-red-500 transition-all" title="Sil">
+                                                                                    <Trash2 size={11} />
+                                                                                </button>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
                                                         </div>
                                                     )}
                                                 </div>

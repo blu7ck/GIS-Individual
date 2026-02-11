@@ -682,6 +682,8 @@ export default {
                 type: asset.type,
                 storage_path: asset.storage_path || '',
                 url: asset.storage_path || '',
+                potree_url: asset.potree_url || null,
+                tiles_url: asset.tiles_url || null,
                 visible: false, // Default unseen - user can toggle visibility manually
                 opacity: 1,
                 position: asset.position || null,
@@ -751,6 +753,8 @@ export default {
               name: a.name,
               type: a.type,
               url: a.storage_path || null,
+              potree_url: a.potree_url || null,
+              tiles_url: a.tiles_url || null,
               visible: false, // Default unseen - user can toggle visibility manually
               opacity: 1,
               position: a.position || null,
