@@ -246,8 +246,10 @@ export function useLayers({ viewer, layers, flyToLayerId, onFlyToComplete, onTil
             const ts = tilesetRefs.current.get(layerId);
             const { height = 0, scale = 1.0, offsetX = 0, offsetY = 0, rotation = 0 } = transform;
 
+            // CesiumJS 1.104+ removed .ready — tilesets from fromUrl() are always ready
             if (ts) {
                 applyTilesetTransform(ts, height, scale);
+                viewer.scene.requestRender();
             }
 
             // Also check for GLB models

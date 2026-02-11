@@ -456,8 +456,8 @@ export const reliableDeleteFromR2 = async (
   let attempt = 0;
   const MAX_ATTEMPTS = 450;
   const DELAY_MS = 3000; // 3 seconds between attempts
-  const PAUSE_EVERY = 15;
-  const PAUSE_DURATION_MS = 300000; // 5 minutes
+  const PAUSE_EVERY = 20;
+  const PAUSE_DURATION_MS = 120000; // 2 minutes
 
   while (attempt < MAX_ATTEMPTS) {
     // Check for cancellation
@@ -493,14 +493,14 @@ export const reliableDeleteFromR2 = async (
         break;
       }
 
-      // Pause every 15 attempts for 5 minutes
+      // Pause every 20 attempts for 2 minutes
       if (attempt % PAUSE_EVERY === 0 && attempt < MAX_ATTEMPTS) {
         onProgress?.({
           currentAttempt: attempt,
           totalDeleted,
           totalErrors,
           status: 'paused',
-          message: `Pausing for 5 minutes after ${PAUSE_EVERY} attempts...`
+          message: `Pausing for 2 minutes after ${PAUSE_EVERY} attempts...`
         });
         await new Promise(resolve => setTimeout(resolve, PAUSE_DURATION_MS));
       }
@@ -524,5 +524,5 @@ export const wipeAllR2Storage = async (
   onProgress?: (progress: DeleteProgress) => void,
   shouldCancel?: () => boolean
 ): Promise<{ totalDeleted: number; totalErrors: number }> => {
-  return reliableDeleteFromR2('uploads/', config, true, onProgress, shouldCancel);
+  return reliableDeleteFromR2('root', config, true, onProgress, shouldCancel);
 };

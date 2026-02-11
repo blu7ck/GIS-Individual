@@ -1,7 +1,6 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { X } from 'lucide-react';
 import { FileUpload } from './FileUpload';
-import { Button } from '../common/Button';
 
 type FileUploadProps = React.ComponentProps<typeof FileUpload>;
 
@@ -19,44 +18,58 @@ export const UploadTool: React.FC<Props> = ({
     onFolderUpload,
     onUrlAdd,
     isUploading,
-    uploadProgress
+    uploadProgress,
+    uploadProgressPercent
 }) => {
+    // Add ESC key listener
+    useEffect(() => {
+        const handleEsc = (event: KeyboardEvent) => {
+            if (event.key === 'Escape' && isOpen) {
+                onToggle();
+            }
+        };
+        window.addEventListener('keydown', handleEsc);
+        return () => window.removeEventListener('keydown', handleEsc);
+    }, [isOpen, onToggle]);
+
     if (!isOpen) return null;
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             {/* Backdrop with Blur */}
             <div
-                className="absolute inset-0 bg-black/40 backdrop-blur-md animate-in fade-in duration-300"
+                className="absolute inset-0 bg-black/60 backdrop-blur-xl animate-in fade-in duration-500"
                 onClick={onToggle}
             />
 
-            {/* Modal Content */}
-            <div className="relative w-full max-w-xl max-h-[90vh] flex flex-col bg-engineering-panel/90 border border-engineering-border shadow-2xl rounded-2xl overflow-hidden animate-in zoom-in-95 fade-in duration-300 backdrop-blur-xl">
-                {/* Modal Header */}
-                <div className="flex-none flex items-center justify-between p-4 border-b border-engineering-border bg-white/5">
-                    <div className="flex flex-col">
-                        <h2 className="text-lg font-bold text-white tracking-tight">Upload Assets</h2>
-                        <p className="text-xs text-gray-400">Add 3D models, KML, or other GIS data to your project</p>
+            {/* Screen-Fixed Close Button (Right Top) */}
+            <div className="fixed top-8 right-8 z-[200]">
+                <button
+                    onClick={onToggle}
+                    className="group flex items-center gap-4 px-6 py-3 bg-black/40 hover:bg-red-500/20 border border-white/10 hover:border-red-500/40 rounded-2xl transition-all duration-500 backdrop-blur-2xl shadow-[0_16px_32px_-8px_rgba(0,0,0,0.5)] active:scale-95"
+                >
+                    <div className="flex flex-col items-end">
+                        <span className="text-[10px] font-black uppercase tracking-[0.3em] text-white/40 group-hover:text-red-400 leading-none mb-1">Kapat</span>
+                        <span className="text-[8px] font-bold text-white/20 group-hover:text-red-500/40">ESC KISAYOLU</span>
                     </div>
-                    <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={onToggle}
-                        className="text-gray-400 hover:text-white hover:bg-white/10 rounded-full w-10 h-10 p-0"
-                    >
-                        <X size={20} />
-                    </Button>
-                </div>
+                    <div className="w-[1px] h-8 bg-white/10 group-hover:bg-red-500/20 mx-1" />
+                    <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-white/5 group-hover:bg-red-500/30 text-white/50 group-hover:text-white transition-all">
+                        <X size={24} />
+                    </div>
+                </button>
+            </div>
 
-                {/* Upload Area */}
-                <div className="p-6 overflow-y-auto custom-scrollbar bg-black/20">
+            {/* Modal Content */}
+            <div className="relative w-full max-w-6xl max-h-[85vh] flex flex-col bg-engineering-panel/80 border border-engineering-border shadow-[0_64px_128px_-32px_rgba(0,0,0,0.8)] rounded-[2.5rem] overflow-hidden animate-in zoom-in-95 fade-in duration-700 backdrop-blur-3xl">
+                {/* Seamless Upload Area */}
+                <div className="flex-1 p-12 overflow-y-auto custom-scrollbar">
                     <FileUpload
                         onUpload={onUpload}
                         onFolderUpload={onFolderUpload}
                         onUrlAdd={onUrlAdd}
                         isUploading={isUploading}
                         uploadProgress={uploadProgress}
+                        uploadProgressPercent={uploadProgressPercent}
                     />
                 </div>
             </div>

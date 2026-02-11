@@ -500,7 +500,7 @@ export const ProjectPanel: React.FC<Props> = ({
                                 </span>
                                 {asset.status === AssetStatus.READY && asset.type === LayerType.TILES_3D && (
                                     <span className="text-[9px] text-gray-600 font-mono tracking-tighter">
-                                        SSE: 16 | {asset.heightOffset ? `${asset.heightOffset}m` : '0m'}
+                                        {asset.heightOffset ? `${asset.heightOffset}m` : '0m'}
                                     </span>
                                 )}
                                 {asset.status === AssetStatus.ERROR && (

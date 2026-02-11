@@ -29,7 +29,7 @@ RUN wget -q https://github.com/potree/PotreeConverter/releases/download/2.1.1/Po
     && test -x /opt/potree/PotreeConverter
 
 ENV PATH="/opt/potree:${PATH}"
-ENV LD_LIBRARY_PATH="/opt/potree:${LD_LIBRARY_PATH}"
+ENV LD_LIBRARY_PATH="/opt/potree"
 
 # Python dependencies (no 3D Tiles)
 RUN pip3 install --no-cache-dir \

@@ -90,7 +90,6 @@ export function useSharing(
             notify('Share link created', 'success');
         }
 
-        setSharingAsset(null);
         return link;
     };
 
@@ -156,7 +155,6 @@ export function useSharing(
             }
         }
 
-        setSharingProject(null);
         return link;
     };
 

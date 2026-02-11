@@ -197,12 +197,12 @@ export const EngineeringLayout: React.FC<EngineeringLayoutProps> = ({
                     {/* Sidebar Container with outside toggle */}
                     <div
                         className={`fixed z-50 transition-all duration-300 ease-in-out ${sidebarOpen
-                            ? 'inset-0 md:inset-auto md:top-4 md:bottom-12 md:left-4 md:w-[320px]'
+                            ? 'inset-0 md:inset-auto md:top-4 md:bottom-12 md:left-4 md:w-[480px]'
                             : 'top-4 bottom-12 left-0 w-0'
                             }`}
                     >
                         {/* The Card - With Clipping */}
-                        <div className={`w-full md:w-[320px] h-full transition-all duration-300 ease-in-out bg-[#0a0a0a]/90 backdrop-blur-3xl border border-white/10 md:rounded-2xl shadow-2xl overflow-hidden flex flex-col ${sidebarOpen ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0 pointer-events-none'
+                        <div className={`w-full md:w-[480px] h-full transition-all duration-300 ease-in-out bg-[#0a0a0a]/90 backdrop-blur-3xl border border-white/10 md:rounded-2xl shadow-2xl overflow-hidden flex flex-col ${sidebarOpen ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0 pointer-events-none'
                             }`}>
                             <ProjectPanel
                                 projects={projects}

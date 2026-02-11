@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Point Cloud Converter for Hekamap (Potree Octree only)
+"""Point Cloud Converter for FixureLabs (Potree Octree only)
 
 - Downloads LAS/LAZ from Cloudflare R2 (S3-compatible)
 - Converts to Potree octree using PotreeConverter
 - Uploads Potree output folder back to R2
 - Updates Supabase assets table
+- Deletes RAW upload from R2 after successful processing (unless KEEP_RAW=1)
 
 Designed to run as a Cloud Run Job.
 """
@@ -30,6 +31,10 @@ def _require_env(name: str) -> str:
     return v
 
 
+def _truthy_env(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
 class PointCloudConverter:
     def __init__(self, asset_id: str, input_url: str, output_bucket: str, input_key: str | None = None):
         self.asset_id = asset_id
@@ -42,10 +47,13 @@ class PointCloudConverter:
         r2_access = _require_env("R2_ACCESS_KEY")
         r2_secret = _require_env("R2_SECRET_KEY")
         r2_endpoint = _require_env("R2_ENDPOINT")
-        self.bucket_name = os.environ.get("R2_BUCKET_NAME", "hekamap-assets").strip() or "hekamap-assets"
+        self.bucket_name = os.environ.get("R2_BUCKET_NAME", "fixurelabs-assets").strip() or "fixurelabs-assets"
 
         sb_url = _require_env("SUPABASE_URL")
         sb_key = _require_env("SUPABASE_KEY")
+
+        # Optional: keep RAW object even after successful processing
+        self.keep_raw = _truthy_env("KEEP_RAW")
 
         # R2 Client (S3-compatible)
         self.s3 = boto3.client(
@@ -86,7 +94,7 @@ class PointCloudConverter:
         key = (parsed.path or "").lstrip("/")
 
         # If URL includes bucket name in the path (common for some public URL patterns), strip it.
-        # Example: /hekamap-assets/uploads/a.laz  -> uploads/a.laz
+        # Example: /fixurelabs-assets/uploads/a.laz  -> uploads/a.laz
         if key.startswith(self.bucket_name + "/"):
             key = key[len(self.bucket_name) + 1 :]
 
@@ -262,6 +270,24 @@ class PointCloudConverter:
 
         self.log("Database updated successfully")
 
+    def delete_raw_from_r2(self) -> None:
+        """Delete the original uploaded LAS/LAZ from R2 after successful processing."""
+        if self.keep_raw:
+            self.log("KEEP_RAW is set; skipping RAW deletion.")
+            return
+
+        key = self._derive_key()
+
+        # Safety guard: only delete expected upload prefix
+        # (change this if your uploads live elsewhere)
+        if not key.startswith("uploads/"):
+            self.log(f"RAW key does not start with 'uploads/'; skipping delete for safety: {key}", "WARN")
+            return
+
+        self.log(f"Deleting RAW file from R2: {key}")
+        self.s3.delete_object(Bucket=self.bucket_name, Key=key)
+        self.log("RAW file deleted from R2")
+
     def set_error(self, error_message: str) -> None:
         self.log(f"Setting error status: {error_message}", "ERROR")
 
@@ -289,6 +315,10 @@ class PointCloudConverter:
             metadata = self._extract_potree_metadata(potree_output)
 
             self.update_database(potree_url, metadata)
+
+            # ✅ Only after everything is successful:
+            self.delete_raw_from_r2()
+
             self.log("✅ Conversion complete!")
 
         except Exception as e:
