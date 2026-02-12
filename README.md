@@ -86,16 +86,16 @@ graph TD
     CF_Pages -->|API Requests| CF_Worker[Cloudflare Worker]
 
     CF_Worker -->|Metadata| Supabase[(Supabase DB)]
-    CF_Worker -->|Signed Upload URL| R2_Temp[(R2 - Temp Raw Storage)]
+    CF_Worker -->|Signed Upload URL| R2Temp[(R2 Temp Raw Storage)]
 
-    User -->|Direct Upload (RAW LAS/LAZ)| R2_Temp
+    User -->|Direct Upload RAW LAS LAZ| R2Temp
 
     Supabase -->|Trigger Processing| GCP_Job[GCP Cloud Run Job]
-    GCP_Job -->|Read RAW| R2_Temp
-    GCP_Job -->|Process| Converter[las2tiles / las2potree]
-    Converter -->|Write Processed| R2_Processed[(R2 - Processed Storage)]
+    GCP_Job -->|Read RAW| R2Temp
+    GCP_Job -->|Process| Converter[las2tiles and las2potree]
+    Converter -->|Write Processed| R2Processed[(R2 Processed Storage)]
 
-    GCP_Job -->|Delete RAW After Success| R2_Temp
+    GCP_Job -->|Delete RAW After Success| R2Temp
     GCP_Job -->|Update Status| Supabase
 ```
 
