@@ -81,23 +81,23 @@ Built by **FixureLabs**, the platform leverages a hybrid-cloud architecture comb
 
 ---
 ```mermaid
-graph TD
+flowchart TD
     User((User)) -->|React App| CF_Pages[Cloudflare Pages]
     CF_Pages -->|API Requests| CF_Worker[Cloudflare Worker]
+    CF_Worker -->|Signed Upload URL| R2_Temp[(R2 - Temp Raw Storage)]
     CF_Worker -->|Metadata| Supabase[(Supabase DB)]
-    CF_Worker -->|Signed Upload URL| R2[(Cloudflare R2 - Temp Raw)]
-    
-    User -->|Direct Upload (RAW LAS/LAZ)| R2
-    
-    Supabase -->|Trigger| GCP_Job[GCP Cloud Run Job]
-    GCP_Job -->|Read RAW (Temp)| R2
-    GCP_Job -->|Process| Converter[las2tiles / las2potree]
-    Converter -->|Write Processed Output| R2
-    
-    GCP_Job -->|Delete RAW| R2
-    GCP_Job -->|Update Status| Supabase
 
+    User -->|Direct Upload (RAW LAS/LAZ)| R2_Temp
+
+    Supabase -->|Trigger Processing| GCP_Job[Cloud Run Job]
+    GCP_Job -->|Read RAW| R2_Temp
+    GCP_Job -->|Convert| Converter[las2potree / las2tiles]
+    Converter -->|Write Processed| R2_Processed[(R2 - Processed Storage)]
+
+    GCP_Job -->|Delete RAW After Success| R2_Temp
+    GCP_Job -->|Update Status| Supabase
 ```
+
 ---
 
 
