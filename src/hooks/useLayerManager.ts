@@ -79,10 +79,11 @@ export function useLayerManager(
 
         if (result.success) {
             setAssets(prev => prev.filter(a => a.id !== id));
-            setStorageRefreshKey?.(prev => prev + 1);
-            notify("Layer deleted", "success");
+            // Removed refresh key update to prevent flicker/race condition
+            // setStorageRefreshKey?.(prev => prev + 1);
+            notify("Kayıt silindi", "success");
         } else {
-            notify(result.error || 'Failed to delete asset', 'error');
+            notify(result.error || 'Silme işlemi başarısız', 'error');
         }
     };
 

@@ -8,6 +8,7 @@ interface SaveModalProps {
     defaultName: string;
     measurementText: string;
     description?: string;
+    isLoading?: boolean;
 }
 
 export const SaveModal: React.FC<SaveModalProps> = ({
@@ -16,7 +17,8 @@ export const SaveModal: React.FC<SaveModalProps> = ({
     onSave,
     defaultName,
     measurementText,
-    description
+    description,
+    isLoading = false
 }) => {
     const [name, setName] = useState(defaultName);
 
@@ -29,7 +31,7 @@ export const SaveModal: React.FC<SaveModalProps> = ({
     if (!isOpen) return null;
 
     const handleSave = () => {
-        if (name.trim()) {
+        if (name.trim() && !isLoading) {
             onSave(name.trim());
         }
     };
@@ -47,7 +49,8 @@ export const SaveModal: React.FC<SaveModalProps> = ({
                     </div>
                     <button
                         onClick={onClose}
-                        className="p-1 text-white/40 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                        disabled={isLoading}
+                        className="p-1 text-white/40 hover:text-white hover:bg-white/10 rounded-lg transition-colors disabled:opacity-50"
                     >
                         <X className="w-5 h-5" />
                     </button>
@@ -74,7 +77,8 @@ export const SaveModal: React.FC<SaveModalProps> = ({
                             onChange={(e) => setName(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && handleSave()}
                             placeholder="Örn: Kuzey Cephe Mesafesi"
-                            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:ring-2 focus:ring-azure/50 transition-all"
+                            disabled={isLoading}
+                            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:ring-2 focus:ring-azure/50 transition-all disabled:opacity-50"
                         />
                     </div>
 
@@ -89,16 +93,24 @@ export const SaveModal: React.FC<SaveModalProps> = ({
                 <div className="p-4 bg-white/5 border-t border-white/5 flex gap-3">
                     <button
                         onClick={onClose}
-                        className="flex-1 px-4 py-2.5 bg-white/5 hover:bg-white/10 text-white font-medium rounded-xl transition-all"
+                        disabled={isLoading}
+                        className="flex-1 px-4 py-2.5 bg-white/5 hover:bg-white/10 text-white font-medium rounded-xl transition-all disabled:opacity-50"
                     >
                         İptal
                     </button>
                     <button
                         onClick={handleSave}
-                        disabled={!name.trim()}
-                        className="flex-1 px-4 py-2.5 bg-azure text-white font-bold rounded-xl shadow-lg shadow-azure/20 hover:bg-azure/80 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                        disabled={!name.trim() || isLoading}
+                        className="flex-1 px-4 py-2.5 bg-azure text-white font-bold rounded-xl shadow-lg shadow-azure/20 hover:bg-azure/80 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
                     >
-                        Kaydet
+                        {isLoading ? (
+                            <>
+                                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                <span>Kaydediliyor...</span>
+                            </>
+                        ) : (
+                            'Kaydet'
+                        )}
                     </button>
                 </div>
             </div>

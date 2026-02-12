@@ -132,6 +132,7 @@ const App: React.FC = () => {
   // 6.1 Pending & Cached Measurements
   const [pendingMeasurement, setPendingMeasurement] = useState<{ text: string; geometry: any; mode: string } | null>(null);
   const [cachedMeasurements, setCachedMeasurements] = useState<AssetLayer[]>([]);
+  const [isSavingMeasurement, setIsSavingMeasurement] = useState(false);
 
   // ...
 
@@ -143,7 +144,7 @@ const App: React.FC = () => {
   };
 
   const handleConfirmSave = async (customName: string) => {
-    if (!pendingMeasurement) return;
+    if (!pendingMeasurement || isSavingMeasurement) return;
 
     if (!selectedProjectId) {
       // Local caching
@@ -174,33 +175,42 @@ const App: React.FC = () => {
 
     // Standard Supabase save
     if (user) {
-      const res = await saveMeasurementAsAnnotation(
-        selectedProjectId,
-        user.id,
-        customName,
-        pendingMeasurement.text,
-        pendingMeasurement.geometry,
-        pendingMeasurement.mode,
-        storageConfig
-      );
+      try {
+        setIsSavingMeasurement(true);
+        const res = await saveMeasurementAsAnnotation(
+          selectedProjectId,
+          user.id,
+          customName,
+          pendingMeasurement.text,
+          pendingMeasurement.geometry,
+          pendingMeasurement.mode,
+          storageConfig
+        );
 
-      if (res.success && res.data) {
-        // Ensure data in state also has mode (important for local update before refresh)
-        if (res.data.data) {
-          res.data.data.mode = pendingMeasurement.mode;
+        if (res.success && res.data) {
+          // Ensure data in state also has mode (important for local update before refresh)
+          if (res.data.data) {
+            res.data.data.mode = pendingMeasurement.mode;
+          }
+          // Strictly enforce visibility
+          res.data.visible = true;
+
+          setAssets(prev => [...prev, res.data!]);
+          // Removed setStorageRefreshKey to prevent race condition/flicker
+          // setStorageRefreshKey(prev => prev + 1); 
+          notify('Ölçüm başarıyla kaydedildi', 'success');
+        } else if (res.error) {
+          notify(res.error, 'error');
         }
-        // Strictly enforce visibility
-        res.data.visible = true;
-
-        setAssets(prev => [...prev, res.data!]);
-        setStorageRefreshKey(prev => prev + 1);
-        notify('Ölçüm başarıyla kaydedildi', 'success');
-      } else if (res.error) {
-        notify(res.error, 'error');
+      } catch (error) {
+        console.error('Save failed:', error);
+        notify('Kaydetme hatası', 'error');
+      } finally {
+        setIsSavingMeasurement(false);
+        setPendingMeasurement(null);
+        setMeasurementMode(MeasurementMode.NONE);
       }
     }
-    setPendingMeasurement(null);
-    setMeasurementMode(MeasurementMode.NONE);
   };
 
   // Quality Settings
@@ -477,13 +487,16 @@ const App: React.FC = () => {
       <SaveModal
         isOpen={!!pendingMeasurement}
         onClose={() => {
-          setPendingMeasurement(null);
-          setMeasurementMode(MeasurementMode.NONE);
+          if (!isSavingMeasurement) {
+            setPendingMeasurement(null);
+            setMeasurementMode(MeasurementMode.NONE);
+          }
         }}
         onSave={handleConfirmSave}
         defaultName={measurementMode.charAt(0) + measurementMode.slice(1).toLowerCase().replace('_', ' ')}
         measurementText={pendingMeasurement?.text || ''}
         description={!selectedProjectId ? "Bir proje seçili değil. Bu ölçüm tarayıcı belleğinde geçici olarak tutulacak." : undefined}
+        isLoading={isSavingMeasurement}
       />
 
       {/* Share Modals */}

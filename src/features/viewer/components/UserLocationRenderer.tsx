@@ -47,10 +47,11 @@ export const UserLocationRenderer: React.FC<UserLocationRendererProps> = ({
         locationEntityRef.current = viewer.entities.add({
             position: position,
             point: {
-                pixelSize: 12,
-                color: Cesium.Color.DODGERBLUE,
+                pixelSize: 14,
+                color: Cesium.Color.fromCssColorString('#0ea5e9'), // Sky Blue
                 outlineColor: Cesium.Color.WHITE,
                 outlineWidth: 3,
+                heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
                 disableDepthTestDistance: Number.POSITIVE_INFINITY
             }
         });
@@ -62,10 +63,9 @@ export const UserLocationRenderer: React.FC<UserLocationRendererProps> = ({
                 ellipse: {
                     semiMajorAxis: userLocation.accuracy,
                     semiMinorAxis: userLocation.accuracy,
-                    material: Cesium.Color.DODGERBLUE.withAlpha(0.2),
+                    material: Cesium.Color.fromCssColorString('#0ea5e9').withAlpha(0.2),
                     outline: true,
-                    outlineColor: Cesium.Color.DODGERBLUE.withAlpha(0.5),
-                    height: 0,
+                    outlineColor: Cesium.Color.fromCssColorString('#0ea5e9').withAlpha(0.5),
                     heightReference: Cesium.HeightReference.CLAMP_TO_GROUND
                 }
             });
