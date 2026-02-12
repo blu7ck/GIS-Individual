@@ -1,11 +1,11 @@
 <p align="center">
-  <img src="public/assets/logo.png" alt="GIS-Individual Logo" width="120" height="120" style="border-radius: 50%;">
+  <img src="public/assets/logo.png" alt="CartaX Geospatial Platform Logo" width="120" height="120" style="border-radius: 50%;">
 </p>
 
-<h1 align="center">GIS-Individual Project</h1>
+<h1 align="center">CartaX Geospatial Platform</h1>
 
 <p align="center">
-  <strong>Professional 3D Geospatial Asset Management & Processing Platform</strong>
+  <strong>Enterprise-Grade 3D Asset Management & Visualization System</strong>
 </p>
 
 <p align="center">
@@ -18,64 +18,66 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/React-19.x-61DAFB?style=flat-square&logo=react" alt="React">
+  <img src="https://img.shields.io/badge/TypeScript-5.x-3178C6?style=flat-square&logo=typescript" alt="TypeScript">
   <img src="https://img.shields.io/badge/CesiumJS-1.136-6CADDF?style=flat-square" alt="CesiumJS">
   <img src="https://img.shields.io/badge/Cloudflare-Workers-F38020?style=flat-square&logo=cloudflare" alt="Cloudflare">
   <img src="https://img.shields.io/badge/GCP-Cloud%20Run-4285F4?style=flat-square&logo=google-cloud" alt="GCP">
-  <img src="https://img.shields.io/badge/Supabase-Auth%20%26%20DB-3ECF8E?style=flat-square&logo=supabase" alt="Supabase">
+  <img src="https://img.shields.io/badge/Supabase-Ready-3ECF8E?style=flat-square&logo=supabase" alt="Supabase">
 </p>
 
 ---
 
 ## 🌍 Overview
 
-**GIS-Individual Project** is a production-grade geospatial visualization platform designed for high-performance 3D asset management. It enables professionals to upload, automate the processing of massive point clouds, and securely share 3D datasets on an interactive high-fidelity globe.
+**CartaX Geospatial Platform** (formerly GIS-Individual) is a production-grade visualization system designed for high-performance 3D asset management. It enables engineering teams to upload, process, and securely share massive geospatial datasets on an interactive high-fidelity globe.
 
-Built by **FixureLabs**, the platform leverages a hybrid-cloud architecture combining Cloudflare's edge speed with GCP's processing power.
+Built by **FixureLabs**, the platform leverages a hybrid-cloud architecture combining Cloudflare's edge speed with GCP's processing power to deliver seamless 3D experiences.
 
 ---
 
 ## ✨ Key Features
 
-### 🚀 Point Cloud Pipeline (LAS/LAZ)
-- **Automated Processing**: Direct upload of raw LAS/LAZ files.
-- **Serverless Scaling**: Triggered GCP Cloud Run Jobs process files into **Potree** and **3D Tiles** formats.
-- **Dual Viewer**: Switch between CesiumJS (3D Tiles) and a dedicated Potree Viewer for high-density analysis.
+### 🚀 Point Cloud Processing Pipeline
+- **Automated Ingestion**: Direct upload of raw LAS/LAZ files (up to 10GB+).
+- **Serverless Conversion**: Triggered GCP Cloud Run Jobs automatically convert raw point clouds into **Potree (Octree)** and **3D Tiles (Cesium)** formats.
+- **Hybrid Viewer**: Seamlessly switch between **CesiumJS** (Global Context) and **PotreeViewer** (High-Density Analysis) for optimal performance.
 
-### 📁 Advanced Multi-Format Support
+### 🔒 SecureViewer & Enterprise Sharing
+- **Secure Links**: Share projects via unique, time-limited URLs.
+- **PIN Protection**: Optional 6-digit AES-encrypted PIN access for sensitive data.
+- **Read-Only Mode**: External stakeholders can view and measure but cannot alter data.
+- **Automated Delivery**: Integration with **Mailgun** for secure link delivery.
+
+### 🛠️ Professional Measurement Tools
+- **Precise Metrics**: Distance, Area (m²), Height, and Coordinate analysis.
+- **Snap-to-Point**: Intelligent cursor snapping for accurate measurements on 3D models.
+- **Layer Visibility**: Toggle measurements and annotations directly from the sidebar.
+- **Session Caching**: Measurements are preserved during the session for quick reporting.
+
+### Advanced Layer Management
 | Format | Description | Features |
 |--------|-------------|----------|
 | **3D Tiles** | Massive photogrammetry | Level-of-detail streaming, height adjustment |
-| **Potree** | High-density point clouds | Measurement, classification visualization |
+| **Potree** | High-density point clouds | Classification visualization, EDL shading |
 | **KML/KMZ** | Geospatial vectors | Automatic camera flight, style retention |
-| **GLB/GLTF** | 3D Models | Coordinated & uncoordinated placement |
-| **DXF/SHP** | CAD & GIS data | Client-side parsing and rendering |
-
-### 📊 Project & Data Management
-- **Hierarchical Folders**: Organize assets by project and site.
-- **Automatic Storage Cleanup**: Smart R2 deletion logic handles folder-based assets (3D Tiles/Potree) and processed outputs.
-- **Storage Metrics**: Real-time visual tracking of R2 bucket usage.
-
-### 🔒 Enterprise Sharing
-- **PIN Protection**: 6-digit AES-encrypted access for public links.
-- **Email Delivery**: Automated notifications via Mailgun.
-- **Read-Only Access**: Securely share projects while maintaining data integrity.
+| **GLB/GLTF** | 3D Models | Coordinated & uncoordinated placement tools |
+| **DXF/SHP** | CAD & GIS data | Client-side parsing and GeoJSON conversion |
 
 ---
 
 ## 🛠️ Tech Stack
 
 ### Client Side
-- **React 19** + **TypeScript** + **Vite**
-- **CesiumJS + Resium**: High-performance 3D engine.
-- **Tailwind CSS**: Modern, responsive engineering UI.
-- **Lucide React**: Vector icons.
+- **React 19** + **TypeScript** + **Vite**: Ultra-fast frontend tooling.
+- **CesiumJS + Resium**: Industry-standard 3D globe engine.
+- **Potree-Core**: Integrated point cloud renderer for massive datasets.
+- **Tailwind CSS**: Modern, responsive engineering UI design.
 
-### Infrastructure & Processing
-- **Cloudflare Workers**: Edge API layer and S3-compatible logic.
-- **Cloudflare R2**: Global object storage for assets.
-- **Supabase**: PostgreSQL, Authentication, and Real-time updates.
-- **GCP Cloud Run**: Docker-based processing pipeline for point cloud conversion.
-- **Mailgun**: Transactional email infrastructure.
+### Infrastructure & Backend
+- **Cloudflare Workers**: Edge API layer for authentication and file operations.
+- **Cloudflare R2**: S3-compatible global object storage for assets.
+- **Supabase**: PostgreSQL database with Row Level Security (RLS).
+- **GCP Cloud Run**: Dockerized conversion pipeline (PDAL, PotreeConverter).
 
 ---
 
@@ -99,47 +101,44 @@ graph TD
 
 ---
 
-## 📦 Project Structure
-
-```
-.
-├── src/                    # Frontend source (React)
-│   ├── features/           # Specialized features (PotreeViewer, etc.)
-│   ├── components/         # Reusable engineering UI components
-│   ├── services/           # Storage, API, and Measurement logic
-│   └── hooks/              # Custom React hooks for global state
-├── backend/
-│   ├── worker.js           # Cloudflare Worker script
-│   └── pointcloud-converter/ # GCP Pipeline (Docker, Python, laszip)
-├── supabase/
-│   └── migrations/         # SQL schema and RLS policies
-└── public/                 # Static assets
-```
-
----
-
 ## 🚀 Quick Start
 
 ### Frontend
-1. Clone the repo and install dependencies: `npm install`
-2. Configure `.env` with your Supabase and Worker URLs.
-3. Start dev server: `npm run dev`
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/blu7ck/GIS-Individual.git
+   cd Hekamap-Workspace-main
+   ```
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. Create `.env` file with your credentials (see `.env.example`).
+4. Start development server:
+   ```bash
+   npm run dev
+   ```
 
 ### Backend Worker
-1. `cd backend && npm install`
+1. Navigate to backend: `cd backend`
 2. Configure `wrangler.toml` with your R2 bucket and Account ID.
-3. Deploy: `wrangler deploy`
+3. Deploy to Cloudflare:
+   ```bash
+   npm install
+   npx wrangler deploy
+   ```
 
 ### Processing Pipeline
-Refer to [backend/pointcloud-converter/SETUP.md](backend/pointcloud-converter/SETUP.md) for Docker build and GCP Cloud Run Job deployment.
+Refer to [backend/pointcloud-converter/SETUP.md](backend/pointcloud-converter/SETUP.md) for Docker build and GCP Cloud Run Job deployment instructions.
 
 ---
 
 ## 🚢 License
 
 Proprietary software developed by **FixureLabs**.  
-Contact: [furkan@fixurelabs.dev](mailto:furkan@fixurelabs.dev)
+For licensing inquiries and support, contact: [furkan@fixurelabs.dev](mailto:furkan@fixurelabs.dev)
 
 <p align="center">
+  <br>
   <strong>POWERED BY FIXURELABS</strong>
 </p>

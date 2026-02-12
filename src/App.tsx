@@ -365,9 +365,14 @@ const App: React.FC = () => {
         Potree Viewer - Exclusive Mode
         When active, EngineeringLayout and CesiumViewer are unmounted to free WebGL resources.
       */}
+      {/* Potree Overlay */}
       {activePotreeLayer ? (
         <PotreeViewer
-          layers={[activePotreeLayer]}
+          layers={assets.filter(a =>
+            a.type === LayerType.POTREE ||
+            a.type === LayerType.LAS
+          )}
+          initialLayerId={activePotreeLayer.id}
           onClose={() => setActivePotreeLayer(null)}
         />
       ) : (
