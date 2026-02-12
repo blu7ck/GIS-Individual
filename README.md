@@ -80,7 +80,7 @@ Built by **FixureLabs**, the platform leverages a hybrid-cloud architecture comb
 - **GCP Cloud Run**: Dockerized conversion pipeline (PDAL, PotreeConverter).
 
 ---
-
+```mermaid
 graph TD
     User((User)) -->|React App| CF_Pages[Cloudflare Pages]
     CF_Pages -->|API Requests| CF_Worker[Cloudflare Worker]
@@ -97,7 +97,9 @@ graph TD
     GCP_Job -->|Delete RAW| R2
     GCP_Job -->|Update Status| Supabase
 
+```
 ---
+
 
 ## 🚀 Quick Start
 
