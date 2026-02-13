@@ -107,17 +107,22 @@ export function useLayers({ viewer, layers, flyToLayerId, onFlyToComplete, onTil
                     // Apply standard styling and labels to entities
                     ds.entities.values.forEach(entity => {
                         // 1. Standardize Style (Blue-ish Gray, Transparent)
-                        const standardColor = Cesium.Color.fromCssColorString('#A4D1E8').withAlpha(0.6); // Light blue-gray
-                        const outlineColor = Cesium.Color.WHITE.withAlpha(0.8);
+                        const isParcel = layer.data?.isParcel;
+                        const parcelFill = Cesium.Color.fromBytes(245, 245, 250).withAlpha(0.3);
+                        const standardColor = isParcel ? parcelFill : Cesium.Color.fromCssColorString('#A4D1E8').withAlpha(0.6);
+                        const outlineColor = isParcel ? Cesium.Color.BLACK : Cesium.Color.WHITE.withAlpha(0.8);
 
                         if (entity.polygon) {
                             entity.polygon.material = new Cesium.ColorMaterialProperty(standardColor);
                             entity.polygon.outline = new Cesium.ConstantProperty(true);
                             entity.polygon.outlineColor = new Cesium.ConstantProperty(outlineColor);
+                            entity.polygon.outlineWidth = new Cesium.ConstantProperty(isParcel ? 2 : 1);
+                            entity.polygon.classificationType = new Cesium.ConstantProperty(Cesium.ClassificationType.BOTH);
                         }
                         if (entity.polyline) {
                             entity.polyline.material = new Cesium.ColorMaterialProperty(outlineColor);
-                            entity.polyline.width = new Cesium.ConstantProperty(2);
+                            entity.polyline.width = new Cesium.ConstantProperty(isParcel ? 2 : 1);
+                            entity.polyline.clampToGround = new Cesium.ConstantProperty(true);
                         }
 
                         // 2. Extract Label (Smart Detection)
@@ -377,42 +382,40 @@ export function useLayers({ viewer, layers, flyToLayerId, onFlyToComplete, onTil
         const geojson = geoJsonRefs.current.get(flyToLayerId);
         const tileset = tilesetRefs.current.get(flyToLayerId);
 
-        let flyTarget: any = null;
-
-        if (kml) {
-            flyTarget = kml;
-        } else if (geojson) {
-            flyToGeoJSON(geojson, viewer, isMobile);
-            onFlyToComplete?.();
-            return;
-        } else if (tileset) {
-            flyTarget = tileset;
-        } else if (modelRefs.current.has(flyToLayerId)) {
-            flyTarget = modelRefs.current.get(flyToLayerId);
-        } else {
-            // Check for Annotation (Measurement) Layers in direct entities
-            const annotationEntities = viewer.entities.values.filter(e =>
-                e.properties && e.properties.layerId && e.properties.layerId.getValue() === flyToLayerId
-            );
-
-            if (annotationEntities.length > 0) {
-                flyTarget = annotationEntities;
-            }
-        }
-
-        if (flyTarget) {
-            if (isMobile && tileset) {
-                viewer.zoomTo(flyTarget);
-            } else if (flyTarget instanceof Cesium.Entity) {
-                viewer.flyTo(flyTarget, {
-                    duration: 1.5,
-                    offset: new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-45), 200)
-                });
+        const runFly = async () => {
+            if (kml) {
+                // KML also has entities, can use flyToGeoJSON logic for consistency
+                await flyToGeoJSON(kml as any, viewer, isMobile);
+            } else if (geojson) {
+                await flyToGeoJSON(geojson, viewer, isMobile);
+            } else if (tileset) {
+                if (isMobile) {
+                    viewer.zoomTo(tileset);
+                } else {
+                    await viewer.flyTo(tileset, { duration: 1.5 });
+                }
+            } else if (modelRefs.current.has(flyToLayerId)) {
+                const model = modelRefs.current.get(flyToLayerId);
+                if (model) {
+                    await viewer.flyTo(model, {
+                        duration: 1.5,
+                        offset: new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-45), 200)
+                    });
+                }
             } else {
-                viewer.flyTo(flyTarget, { duration: 1.5 });
+                // Check for Annotation (Measurement) Layers in direct entities
+                const annotationEntities = viewer.entities.values.filter(e =>
+                    e.properties && e.properties.layerId && e.properties.layerId.getValue() === flyToLayerId
+                );
+
+                if (annotationEntities.length > 0) {
+                    await viewer.flyTo(annotationEntities, { duration: 1.5 });
+                }
             }
             onFlyToComplete?.();
-        }
+        };
+
+        runFly();
     }, [flyToLayerId, viewer, isMobile, onFlyToComplete]);
 
     // Render function now returns null - layers are managed imperatively

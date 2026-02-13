@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { NotificationItem, NotificationType } from '../components/common/Notification';
 import { AssetLayer } from '../types';
 
-export type PopupType = 'none' | 'layers' | 'measurements' | 'upload' | 'settings';
+export type PopupType = 'none' | 'layers' | 'measurements' | 'upload' | 'settings' | 'parcel';
 
 export function useUIState() {
     // Routing / View Mode

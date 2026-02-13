@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Layers, Map } from 'lucide-react';
+import { Settings, Map, Layers } from 'lucide-react';
 import { MapType, QualitySettings, PerformanceMode } from '../../types';
 import { QualitySettingsPanel } from './QualitySettingsPanel';
 
@@ -109,7 +109,7 @@ export const MapControls: React.FC<Props> = ({
           }
         `}
       >
-        <Layers className="w-6 h-6" />
+        <Settings className="w-6 h-6" />
       </button>
 
       {/* PORTAL for guaranteed positioning */}

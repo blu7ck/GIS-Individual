@@ -12,6 +12,8 @@ import { MapControls } from '../viewer/MapControls';
 import { MeasurementTool } from '../viewer/MeasurementTool';
 import { UploadTool } from '../ui/UploadTool';
 import { Compass } from '../../features/viewer/components/Compass';
+import { ParcelQueryTool } from '../viewer/ParcelQueryTool';
+import { ParcelInfoTool } from '../viewer/ParcelInfoTool';
 
 // Types
 import type { PopupType } from '../../hooks/useUIState';
@@ -96,6 +98,12 @@ interface EngineeringLayoutProps {
     isPlacingOnMap?: string | null;
     setIsPlacingOnMap?: (id: string | null) => void;
     isSecureMode?: boolean;
+
+    // Parcel Query Hook Data
+    parcelQuery?: any; // strict typing skipped for brevity, passed to tool
+    activeParcelAsset?: AssetLayer | null;
+    onCloseParcelInfo?: () => void;
+    onShowParcelDetail?: (data: any) => void;
 }
 
 // ============================================================================
@@ -152,6 +160,10 @@ export const EngineeringLayout: React.FC<EngineeringLayoutProps> = ({
     isPlacingOnMap,
     setIsPlacingOnMap,
     isSecureMode = false,
+    parcelQuery,
+    activeParcelAsset,
+    onCloseParcelInfo,
+    onShowParcelDetail,
 }) => {
     // ========================================================================
     // STATE
@@ -230,6 +242,7 @@ export const EngineeringLayout: React.FC<EngineeringLayoutProps> = ({
                                 uploadProgress={uploadProgress}
                                 uploadProgressPercent={uploadProgressPercent}
                                 readOnly={isSecureMode}
+                                onShowParcelDetail={onShowParcelDetail}
                             />
                         </div>
 
@@ -269,6 +282,27 @@ export const EngineeringLayout: React.FC<EngineeringLayoutProps> = ({
                     {/* 3. Bottom Right: Measurements & Settings      */}
                     {/* ============================================ */}
                     <div className="fixed bottom-12 right-4 z-40 flex items-center gap-3">
+                        {/* Parcel Info Tool - Shows when a parcel asset is selected */}
+                        <ParcelInfoTool
+                            activeAsset={activeParcelAsset || null}
+                            onClose={() => onCloseParcelInfo?.()}
+                            performanceMode={qualitySettings?.performanceMode}
+                        />
+
+                        {/* Parcel Query Tool */}
+                        {parcelQuery && (
+                            <ParcelQueryTool
+                                isOpen={activePopup === 'parcel'}
+                                onToggle={() => togglePopup('parcel')}
+                                performanceMode={qualitySettings?.performanceMode}
+                                {...parcelQuery}
+                                onSaveSelection={parcelQuery.saveResult}
+                                onExportKml={parcelQuery.exportKml}
+                                selectedProjectId={selectedProjectId}
+                                onShowParcelDetail={onShowParcelDetail}
+                            />
+                        )}
+
                         {/* Measurement Tool */}
                         <MeasurementTool
                             isOpen={activePopup === 'measurements'}

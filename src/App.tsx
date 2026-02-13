@@ -17,11 +17,13 @@ import { useProjectData } from './hooks/useProjectData';
 import { useFileUpload } from './hooks/useFileUpload';
 import { useSharing } from './hooks/useSharing';
 import { useLayerManager } from './hooks/useLayerManager';
+import { useParcelQuery } from './hooks/useParcelQuery';
 
 // New Components
 import { EngineeringLayout } from './components/layout/EngineeringLayout';
 import { PotreeViewer } from './features/viewer/components/PotreeViewer';
 import { UncoordinatedModelViewer } from './components/viewer/UncoordinatedModelViewer';
+import { ParcelDetailModal } from './components/viewer/ParcelDetailModal';
 
 // Global Cesium Def
 if (typeof window !== 'undefined') {
@@ -128,6 +130,71 @@ const App: React.FC = () => {
   const [sceneMode, setSceneMode] = useState<SceneViewMode>(SceneViewMode.SCENE3D);
   const [measurementMode, setMeasurementMode] = useState<MeasurementMode>(MeasurementMode.NONE);
   const [cesiumViewerInstance, setCesiumViewerInstance] = useState<Cesium.Viewer | null>(null);
+
+  const parcelQuery = useParcelQuery({
+    viewer: cesiumViewerInstance,
+    storageConfig,
+    userId: user?.id,
+    onAssetsChange: () => setStorageRefreshKey(prev => prev + 1)
+  });
+
+  // Visualize Parcel Result
+  useEffect(() => {
+    if (!cesiumViewerInstance || !parcelQuery.currentResult) return;
+
+    const viewer = cesiumViewerInstance;
+    const { feature } = parcelQuery.currentResult;
+
+    let addedDataSource: Cesium.DataSource | null = null;
+
+    const load = async () => {
+      try {
+        // Load GeoJSON
+        const lightFill = Cesium.Color.fromBytes(245, 245, 250).withAlpha(0.3);
+        const ds = await Cesium.GeoJsonDataSource.load(feature, {
+          stroke: Cesium.Color.BLACK,
+          fill: lightFill,
+          strokeWidth: 2,
+          clampToGround: true
+        });
+
+        // Apply styling specifically if load options didn't fully take effect for all entity types
+        ds.entities.values.forEach(entity => {
+          if (entity.polygon) {
+            entity.polygon.material = new Cesium.ColorMaterialProperty(lightFill);
+            entity.polygon.outline = new Cesium.ConstantProperty(true);
+            entity.polygon.outlineColor = new Cesium.ConstantProperty(Cesium.Color.BLACK);
+            entity.polygon.outlineWidth = new Cesium.ConstantProperty(2);
+            entity.polygon.classificationType = new Cesium.ConstantProperty(Cesium.ClassificationType.BOTH);
+          }
+          if (entity.polyline) {
+            entity.polyline.material = new Cesium.ColorMaterialProperty(Cesium.Color.BLACK);
+            entity.polyline.width = new Cesium.ConstantProperty(2);
+            entity.polyline.clampToGround = new Cesium.ConstantProperty(true);
+          }
+        });
+
+        if (!viewer.isDestroyed()) {
+          viewer.dataSources.add(ds);
+          addedDataSource = ds;
+        }
+      } catch (e) {
+        console.error('Failed to visualize parcel:', e);
+      }
+    };
+
+    load();
+
+    return () => {
+      if (addedDataSource && !viewer.isDestroyed()) {
+        viewer.dataSources.remove(addedDataSource);
+      }
+    };
+  }, [parcelQuery.currentResult, cesiumViewerInstance]);
+
+  // 7.1 Active Parcel Info State
+  const [activeParcelAsset, setActiveParcelAsset] = useState<AssetLayer | null>(null);
+  const [activeDetailResult, setActiveDetailResult] = useState<any | null>(null);
 
   // 6.1 Pending & Cached Measurements
   const [pendingMeasurement, setPendingMeasurement] = useState<{ text: string; geometry: any; mode: string } | null>(null);
@@ -313,6 +380,10 @@ const App: React.FC = () => {
     }
   }, [_setActiveModelLayer, setActivePotreeLayer]);
 
+  const handleShowParcelDetail = useCallback((result: any) => {
+    setActiveDetailResult(result);
+  }, []);
+
 
   // Tiles height save handler
 
@@ -399,7 +470,15 @@ const App: React.FC = () => {
           onShareProject={project => setSharingProject(project)}
 
           // Layer Actions
-          onLayerClick={(id) => setFlyToLayerId(id)}
+          onLayerClick={(id) => {
+            setFlyToLayerId(id);
+            const asset = assets.find(a => a.id === id);
+            if (asset?.data?.isParcel) {
+              setActiveParcelAsset(asset);
+            } else {
+              setActiveParcelAsset(null);
+            }
+          }}
           onToggleLayer={handleToggleLayer}
           onDeleteLayer={handleDeleteLayer}
           onShareLayer={layer => setSharingAsset(layer)}
@@ -445,6 +524,10 @@ const App: React.FC = () => {
           setPositioningLayerId={setPositioningLayerId}
           isPlacingOnMap={isPlacingOnMap}
           setIsPlacingOnMap={setIsPlacingOnMap}
+          parcelQuery={parcelQuery}
+          activeParcelAsset={activeParcelAsset}
+          onCloseParcelInfo={() => setActiveParcelAsset(null)}
+          onShowParcelDetail={handleShowParcelDetail}
         >
           <CesiumViewer
             className="w-full h-full"
@@ -476,7 +559,12 @@ const App: React.FC = () => {
                   setIsPlacingOnMap(null); // Clear placement mode after click
                   notify('Model konumu güncellendi', 'success');
                 }
+              } else if (parcelQuery.isQueryMode) {
+                parcelQuery.executeQuery({ mode: 'by_click', lat: coords.lat, lon: coords.lng });
+                if (activePopup !== 'parcel') setActivePopup('parcel');
               }
+              // Clear active parcel info on map click
+              setActiveParcelAsset(null);
             }}
           />
         </EngineeringLayout>
@@ -541,6 +629,15 @@ const App: React.FC = () => {
 
       {/* Notification Toast */}
       <NotificationContainer notifications={notifications} onDismiss={dismissNotification} />
+
+      {/* Global Parcel Detail Modal */}
+      {activeDetailResult && (
+        <ParcelDetailModal
+          isOpen={!!activeDetailResult}
+          onClose={() => setActiveDetailResult(null)}
+          data={activeDetailResult}
+        />
+      )}
     </div>
   );
 };

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Folder, FileBox, Plus, Minus, Upload, ChevronRight, Eye, EyeOff, Share2, Map, Trash2, Box, Edit2, Check, X as XIcon, SlidersHorizontal, Save, AlertTriangle, Download, ExternalLink, Loader2, MousePointer2, RotateCcw } from 'lucide-react';
+import { Folder, FileBox, Plus, Minus, Upload, ChevronRight, Eye, EyeOff, Share2, Map, Trash2, Box, Edit2, Check, X as XIcon, SlidersHorizontal, Save, AlertTriangle, Download, ExternalLink, Loader2, MousePointer2, RotateCcw, Info } from 'lucide-react';
 
 /**
  * Modern Number Input with +/- controls for better UX on both desktop and touch.
@@ -79,6 +79,7 @@ interface Props {
     externalCreateTrigger?: number; // Increment to trigger create mode
     storageConfig?: StorageConfig | null; // For storage bar
     readOnly?: boolean;
+    onShowParcelDetail?: (data: any) => void;
 }
 
 interface DeleteConfirmState {
@@ -114,7 +115,8 @@ export const ProjectPanel: React.FC<Props> = ({
     uploadProgressPercent,
     externalCreateTrigger,
     storageConfig,
-    readOnly = false
+    readOnly = false,
+    onShowParcelDetail
 }) => {
     // Stable random color generator for project folders
     const getProjectColor = (id: string) => {
@@ -580,6 +582,30 @@ export const ProjectPanel: React.FC<Props> = ({
                                                 <Trash2 size={12} />
                                             </button>
                                         </>
+                                    )}
+                                    {asset.data?.isParcel && (
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (onShowParcelDetail) {
+                                                    const result = {
+                                                        feature: {
+                                                            type: 'Feature',
+                                                            geometry: null,
+                                                            properties: asset.data.properties
+                                                        },
+                                                        metrics: asset.data.metrics,
+                                                        elevation: asset.data.elevation,
+                                                        query_key: asset.id
+                                                    };
+                                                    onShowParcelDetail(result);
+                                                }
+                                            }}
+                                            className="p-1.5 rounded-md text-gray-400 hover:text-orange-400 hover:bg-orange-400/10 transition-all"
+                                            title="Detay Görüntüle"
+                                        >
+                                            <Info size={12} />
+                                        </button>
                                     )}
                                     {asset.type === LayerType.GLB_UNCOORD && (
                                         <>

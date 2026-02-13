@@ -26,7 +26,7 @@ export const MeasurementTool: React.FC<Props> = ({ activeMode, onSetMode, isOpen
     return (
         <ToolbarItem
             icon={<Ruler size={20} />}
-            label="ÖLÇÜM VE ANALİZ"
+            label="ARAÇLAR VE ANALİZ"
             isOpen={isOpen}
             onToggle={onToggle}
             isActive={activeMode !== MeasurementMode.NONE}
